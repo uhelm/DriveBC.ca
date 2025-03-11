@@ -10,14 +10,7 @@ permissions:
   packages: write
 
 on:
-  push:
-    tags:
-      - 'r*'  # Trigger this workflow only for tags starting with "r"
   workflow_dispatch:
-    inputs:
-      tag_name:
-        description: 'Create a tag starting with rc'
-        required: true
 
 jobs:
   tag:

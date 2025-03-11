@@ -10,14 +10,7 @@ permissions:
   packages: write
 
 on:
-  push:
-    tags:
-      - 'v*'  # Trigger this workflow only for tags starting with "v"
   workflow_dispatch:
-    inputs:
-      tag_name:
-        description: 'Create a tag starting with v0.0.0 (Yr, Sprint, Build)'
-        required: true
 
 jobs:
   tag:
