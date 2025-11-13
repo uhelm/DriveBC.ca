@@ -1,0 +1,126 @@
+@import "../../styles/variables.scss";
+
+.survey {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translate(-50%, 0);
+  background-color: $Info;
+  padding: .6rem 0.75rem .75rem 0.75rem;
+  border-radius: 4px;
+  box-shadow: 0px 1.937px 4.358px 0px rgba(0, 0, 0, 0.13), 0px 0.363px 1.089px 0px rgba(0, 0, 0, 0.10);
+  z-index: 12;
+  color: white;
+  width: 360px;
+  font-size: 0.875rem;
+
+  animation: fade-in 0.3s;
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 100;
+    }
+  }
+
+  &__row {
+    display: flex;
+    flex-direction: row;
+  }
+
+  .icon {
+    margin-top: .4rem;
+    margin-right: .75rem;
+
+    svg {
+      padding: 5px;
+      border: 2px solid white;
+      border-radius: 4px;
+    }
+  }
+
+  .content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    align-content: flex-start;
+
+    &__header {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+
+      &__text {
+        font-weight: 700;
+
+      }
+
+      .survey-close-btn {
+        padding: 0;
+        font-size: 0.75rem;
+        width: 20px;
+        height: 20px;
+        border-radius: 10px;
+        margin: 0 0 0 1rem;
+      }
+    }
+
+    &__description {
+    }
+  }
+
+  .survey-form {
+    margin-top: .75rem;
+
+    .form-group {
+      width: 100%;
+      display: grid;
+      row-gap: 4px;
+
+      input {
+        grid-column: 1/4;
+        padding: 4px 10px;
+      }
+      .invalid-feedback {
+        grid-column: 1/6;
+        padding: 4px 8px;
+        background: $Surface-major;
+        border: 1px solid $Base-red;
+        border-radius: 4px;
+      }
+    }
+
+    .btn {
+      color: white;
+      border: 1px solid white;
+      white-space: nowrap;
+      padding: 4px 10px;
+      margin-left: 0.5rem;
+      margin-bottom: 0;
+      height: fit-content;
+      grid-column: 4/6;
+      &:hover {
+        color: black;
+      }
+    }
+  }
+
+  .submit-error {
+    margin-top: .5rem;
+    background: $Surface-major;
+    color: $Error;
+    padding: .5rem;
+    border-radius: 4px;
+
+    ul {
+      margin-bottom: 0;
+    }
+
+    li {
+      color: $Error;
+    }
+  }
+}

@@ -1,0 +1,21 @@
+@import "../../styles/variables";
+
+
+.route-object-list {
+  .route-details {
+    max-height: calc(60vh);
+
+    .route-items {
+      .route-item {
+        svg {
+          width: 18px;
+          height: 16px;
+        }
+
+        &:hover {
+          background: $Grey20;
+        }
+      }
+    }
+  }
+}

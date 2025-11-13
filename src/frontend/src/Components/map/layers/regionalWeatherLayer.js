@@ -9,7 +9,7 @@ import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 
 // Styling
-import { regionalStyles } from '../../data/featureStyleDefinitions.js';
+import { regionalStyles, regionalWarningStyles } from '../../data/featureStyleDefinitions.js';
 
 export function getRegionalWeatherLayer(weatherData, projectionCode, mapContext, referenceData, updateReferenceFeature, setLoadingLayers) {
   const vectorSource = new VectorSource();
@@ -19,14 +19,13 @@ export function getRegionalWeatherLayer(weatherData, projectionCode, mapContext,
       return;
     }
 
-    // Offset ~500m East to prevent overlapping with other features
-    const lng = weather.location.coordinates[0] + 0.0044;
+    const lng = weather.location.coordinates[0];
     const lat = weather.location.coordinates[1];
     const olGeometry = new Point([lng, lat]);
     const olFeature = new ol.Feature({ geometry: olGeometry, type: 'regionalWeather' });
 
     // Transfer properties
-    olFeature.setProperties(weather)
+    olFeature.setProperties(weather);
 
     // Transform the projection
     const olFeatureForMap = transformFeature(
@@ -42,7 +41,7 @@ export function getRegionalWeatherLayer(weatherData, projectionCode, mapContext,
 
     if (referenceData?.type === 'regionalWeather') {
       // Update the reference feature if id is the reference
-      if (weather.id == referenceData.id) {
+      if (weather.id == referenceData.id) {  // Intentional loose equality for string IDs
         updateReferenceFeature(olFeatureForMap);
       }
     }
@@ -63,7 +62,16 @@ export function updateRegionalWeatherLayer(weathers, layer, setLoadingLayers) {
   }, {});
 
   for (const weatherFeature of layer.getSource().getFeatures()) {
-    weatherFeature.setStyle(weathersDict[weatherFeature.getId()] ? regionalStyles['static'] : new Style(null));
+    if (!weatherFeature.getProperties()['clicked']) {
+      if (weathersDict[weatherFeature.getId()]) {
+        const warnings = weatherFeature.get('warnings');
+        const weatherStyle = warnings ? regionalWarningStyles['static'] : regionalStyles['static'];
+        weatherFeature.setStyle(weatherStyle);
+
+      } else {
+        weatherFeature.setStyle(new Style(null));
+      }
+    }
   }
 
   setLoadingLayers(prevState => ({

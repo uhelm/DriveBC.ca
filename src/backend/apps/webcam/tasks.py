@@ -2,25 +2,36 @@ import datetime
 import io
 import logging
 import os
+import socket
+import time
 import urllib.request
+from collections import Counter
 from itertools import groupby
 from math import floor
 from pathlib import Path
+from urllib.error import HTTPError
 from zoneinfo import ZoneInfo
 
 import httpx
-from django.conf import settings
-from django.contrib.gis.geos import LineString, MultiLineString, Point
-from django.core.exceptions import ObjectDoesNotExist
-from PIL import Image, ImageDraw, ImageFont
-
+from apps.event.enums import EVENT_DISPLAY_CATEGORY
+from apps.event.models import Event
 from apps.feed.client import FeedClient
-from apps.shared.models import RouteGeometry
-from apps.webcam.enums import CAMERA_DIFF_FIELDS
+from apps.shared.models import Area, RouteGeometry
+from apps.weather.models import CurrentWeather, HighElevationForecast, RegionalWeather
+from apps.webcam.enums import CAMERA_DIFF_FIELDS, CAMERA_TASK_DEFAULT_TIMEOUT
 from apps.webcam.hwy_coords import hwy_coords
 from apps.webcam.models import Webcam
 from apps.webcam.serializers import WebcamSerializer
-from apps.webcam.views import WebcamAPI
+from django.conf import settings
+from django.contrib.gis.db.models.functions import Distance
+from django.contrib.gis.geos import LineString, MultiLineString, Point
+from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import F
+from huey.exceptions import CancelExecution
+from PIL import Image, ImageDraw, ImageFile, ImageFont
+from psycopg import IntegrityError
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +60,16 @@ def populate_webcam_from_data(webcam_data):
 
 
 def populate_all_webcam_data():
+    start_time = time.time()
+
     feed_data = FeedClient().get_webcam_list()["webcams"]
-
     for webcam_data in feed_data:
-        populate_webcam_from_data(webcam_data)
+        # Check if the task has timed out at the start of each iteration
+        if time.time() - start_time > CAMERA_TASK_DEFAULT_TIMEOUT:
+            logger.warning(f"populate_all_webcam_data stopped: exceeded {CAMERA_TASK_DEFAULT_TIMEOUT} seconds.")
+            raise CancelExecution()
 
-    # Rebuild cache
-    WebcamAPI().set_list_data()
+        populate_webcam_from_data(webcam_data)
 
 
 def update_single_webcam_data(webcam):
@@ -67,7 +81,7 @@ def update_single_webcam_data(webcam):
             Webcam.objects.filter(id=webcam.id).delete()
 
         # Skip updating otherwise
-        return
+        return False
 
     # Only update if existing data differs for at least one of the fields
     for field in CAMERA_DIFF_FIELDS:
@@ -76,17 +90,22 @@ def update_single_webcam_data(webcam):
             webcam_serializer.is_valid(raise_exception=True)
             webcam_serializer.save()
             update_webcam_image(webcam_data)
-            return
+            return True
 
 
 def update_all_webcam_data():
-    for webcam in Webcam.objects.all():
-        current_time = datetime.datetime.now(tz=ZoneInfo("America/Vancouver"))
-        if webcam.should_update(current_time):
-            update_single_webcam_data(webcam)
+    start_time = time.time()
+    for camera in Webcam.objects.all():
+        # Check if the task has timed out at the start of each iteration
+        if time.time() - start_time > CAMERA_TASK_DEFAULT_TIMEOUT:
+            logger.warning(f"update_all_webcam_data stopped: exceeded {CAMERA_TASK_DEFAULT_TIMEOUT} seconds.")
+            raise CancelExecution()
 
-    # Rebuild cache
-    WebcamAPI().set_list_data()
+        current_time = datetime.datetime.now(tz=ZoneInfo("America/Vancouver"))
+        if camera.should_update(current_time):
+            updated = update_single_webcam_data(camera)
+            if updated:
+                update_camera_group_id(camera)
 
 
 def wrap_text(text, pen, font, width):
@@ -143,7 +162,8 @@ def update_webcam_image(webcam):
             base_url = base_url[:-1]
         endpoint = f'{base_url}/webcams/{webcam["id"]}/imageSource'
 
-        with urllib.request.urlopen(endpoint) as url:
+        logger.info(f"Requesting GET {endpoint}")
+        with urllib.request.urlopen(endpoint, timeout=10) as url:
             image_data = io.BytesIO(url.read())
 
         raw = Image.open(image_data)
@@ -202,12 +222,18 @@ def update_webcam_image(webcam):
             delta = mean - stddev
 
         except Exception as e:
-            logger.info(e)
+            logger.exception(e)
 
         if lastmod is not None:
             delta = datetime.timedelta(seconds=delta)
             lastmod = floor((lastmod + delta).timestamp())  # POSIX timestamp
             os.utime(filename, times=(lastmod, lastmod))
+
+    except socket.timeout as e:
+        logger.error(f'Timeout fetching webcam image for camera {webcam["id"]}: {e}')
+
+    except HTTPError as e:  # log HTTP errors without stacktrace to reduce log noise
+        logger.error(f'{e} on {endpoint}')
 
     except Exception as e:
         logger.exception(e)
@@ -226,7 +252,11 @@ def add_order_to_camera_group(key, cams):
         # Save distance along route to cams
         route_ls = LineString(all_coords)
         for cam in cams:
-            cam.route_distance = route_ls.project(cam.location)
+            try:
+                cam.route_distance = route_ls.project(cam.location)
+            except Exception as e:
+                logger.warning(f"Error projecting cam {cam.id} on route {key}: {e}")
+                cam.route_distance = 0
 
         # Sort cams by distance along route and update
         last_point = None
@@ -256,9 +286,6 @@ def add_order_to_cameras():
     # Group by route name and add order to cams in each group
     for route_name, cam_group in groupby(query, lambda x: x.highway if x.highway != '0' else x.highway_description):
         add_order_to_camera_group(route_name, list(cam_group))
-
-    # Rebuild cache
-    WebcamAPI().set_list_data()
 
 
 def reverse_ls_routes(ls_routes):
@@ -315,3 +342,94 @@ def build_route_geometries(coords=hwy_coords):
 
         else:
             RouteGeometry.objects.filter(id=key).update(routes=MultiLineString(ls_routes))
+
+
+# DBC22-4679 find and update the nearest weather stations for a camera
+def update_camera_weather_station(camera, weather_class):
+    meters_in_degrees = 0.000008983152841195  # 1 meter in degrees at the equator
+
+    stations_qs = weather_class.objects.filter(
+        location__dwithin=(camera.location, 30000 * meters_in_degrees),  # 30km in degrees
+        elevation__lte=camera.elevation + 300,
+        elevation__gte=camera.elevation - 300,  # within 300m elevation,
+    ) if isinstance(weather_class, CurrentWeather) else weather_class.objects.all()
+
+    closest_station = stations_qs.annotate(
+        distance=Distance('location', camera.location)
+    ).order_by('distance').first()
+
+    if closest_station:
+        if weather_class == CurrentWeather:
+            Webcam.objects.filter(id=camera.id).update(local_weather_station=closest_station)
+
+        elif weather_class == RegionalWeather:
+            Webcam.objects.filter(id=camera.id).update(regional_weather_station=closest_station)
+
+        elif weather_class == HighElevationForecast:
+            Webcam.objects.filter(id=camera.id).update(hev_station=closest_station)
+
+
+def update_camera_relations():
+    for area in Area.objects.all():
+        Webcam.objects.filter(location__within=area.geometry).update(area=area)
+
+    for camera in Webcam.objects.all():
+        update_camera_weather_station(camera, RegionalWeather)
+        update_camera_weather_station(camera, CurrentWeather)
+        update_camera_weather_station(camera, HighElevationForecast)
+
+
+def update_camera_group_id(camera):
+    try:
+        group_id = Webcam.objects.filter(location=camera.location).order_by('id').first().id
+        Webcam.objects.filter(id=camera.id).update(group_id=group_id)  # update without triggering save
+
+    except IntegrityError as e:
+        logger.warning(f"Error updating group id for camera {camera.id}: {e}")
+
+
+def update_all_camera_group_ids(*args, **kwargs):
+    for camera in Webcam.objects.all():
+        update_camera_group_id(camera)
+
+
+def get_nearby_queryset(model, obj):
+    meters_in_degrees = 0.000008983152841195  # 1 meter in degrees at the equator
+    return model.objects.filter(
+        location__dwithin=(obj.location, 3000*meters_in_degrees),
+    ).exclude(
+        location__dwithin=(obj.location, 10*meters_in_degrees)
+    )
+
+
+def update_camera_nearby_objs():
+    # Iterate through "parent" webcams and update their nearby objects count
+    for parent_cam in Webcam.objects.filter(id=F('group_id')):
+        nearby_cams_count = get_nearby_queryset(Webcam, parent_cam).distinct('location').count()
+
+        nearby_events = get_nearby_queryset(Event, parent_cam).values_list('display_category', flat=True)
+        event_counts = Counter(nearby_events)
+
+        nearby_local_weathers = get_nearby_queryset(CurrentWeather, parent_cam).count()
+        nearby_regional_weathers = get_nearby_queryset(RegionalWeather, parent_cam).count()
+        nearby_hev_weathers = get_nearby_queryset(HighElevationForecast, parent_cam).count()
+
+        nearby_objs = {
+            "cameras": nearby_cams_count,
+            EVENT_DISPLAY_CATEGORY.CLOSURE: event_counts[EVENT_DISPLAY_CATEGORY.CLOSURE],
+            EVENT_DISPLAY_CATEGORY.MAJOR_DELAYS: event_counts[EVENT_DISPLAY_CATEGORY.MAJOR_DELAYS],
+            EVENT_DISPLAY_CATEGORY.MINOR_DELAYS: event_counts[EVENT_DISPLAY_CATEGORY.MINOR_DELAYS],
+            EVENT_DISPLAY_CATEGORY.FUTURE_DELAYS: event_counts[EVENT_DISPLAY_CATEGORY.FUTURE_DELAYS],
+            EVENT_DISPLAY_CATEGORY.ROAD_CONDITION: event_counts[EVENT_DISPLAY_CATEGORY.ROAD_CONDITION],
+            EVENT_DISPLAY_CATEGORY.CHAIN_UP: event_counts[EVENT_DISPLAY_CATEGORY.CHAIN_UP],
+            'weather': nearby_regional_weathers + nearby_local_weathers + nearby_hev_weathers,
+        }
+
+        Webcam.objects.filter(id=parent_cam.id).update(nearby_objs=nearby_objs)
+
+    for child_cam in Webcam.objects.exclude(id=F('group_id')):
+        parent_cam = child_cam.group
+        if parent_cam:
+            Webcam.objects.filter(id=child_cam.id).update(
+                nearby_objs=parent_cam.nearby_objs
+            )

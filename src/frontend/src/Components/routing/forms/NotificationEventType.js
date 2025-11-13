@@ -19,12 +19,12 @@ const NotificationEventType = forwardRef((props, ref) => {
   // States
   const [errorMessage, setErrorMessage] = useState('');
   const [notificationEventTypes, setNotificationEventTypes] = useState({
-    // advisories: true,
+    advisories: route.notification_types && route.notification_types.includes('advisories'),
     closures: route.notification_types && route.notification_types.includes('closures'),
     majorEvents: route.notification_types && route.notification_types.includes('majorEvents'),
     minorEvents: route.notification_types && route.notification_types.includes('minorEvents'),
     roadConditions: route.notification_types && route.notification_types.includes('roadConditions'),
-    // chainUps: true
+    chainUps: route.notification_types && route.notification_types.includes('chainUps'),
   });
 
   /* Helpers */
@@ -56,11 +56,11 @@ const NotificationEventType = forwardRef((props, ref) => {
 
   /* Rendering */
   // Sub components
-  // const tooltipAdvisories = (
-  //   <Tooltip id="tooltipAdvisories" className="tooltip-content">
-  //     <p>Major events, such as storms, that impact large areas that include locations on your trip</p>
-  //   </Tooltip>
-  // );
+  const tooltipAdvisories = (
+    <Tooltip id="tooltipAdvisories" className="tooltip-content">
+      <p>Major events, such as storms, that impact large areas that include locations on your trip</p>
+    </Tooltip>
+  );
 
   const tooltipClosures = (
     <Tooltip id="tooltipClosures" className="tooltip-content">
@@ -86,23 +86,23 @@ const NotificationEventType = forwardRef((props, ref) => {
     </Tooltip>
   );
 
-  // const tooltipCommercial = (
-  //   <Tooltip id="tooltipCommercial" className="tooltip-content">
-  //     <p>Segments of the highway that require Commercial Vehicles over 11,794kg to have chains on in order to use the highway</p>
-  //   </Tooltip>
-  // );
+  const tooltipCommercial = (
+    <Tooltip id="tooltipCommercial" className="tooltip-content">
+      <p>Segments of the highway that require Commercial Vehicles over 11,794kg to have chains on in order to use the highway</p>
+    </Tooltip>
+  );
 
   // Main components
   return (
     <Form className="notifications-section notifications-targets">
 
       {[
-        // { name: 'Advisories', tooltip: tooltipAdvisories, value: 'advisories' },
+        { name: 'Advisories', tooltip: tooltipAdvisories, value: 'advisories', checked: notificationEventTypes.advisories },
         { name: 'Closures', tooltip: tooltipClosures, value: 'closures', checked: notificationEventTypes.closures },
         { name: 'Major delays', tooltip: tooltipMajor, value: 'majorEvents', checked: notificationEventTypes.majorEvents },
         { name: 'Minor delays', tooltip: tooltipMinor, value: 'minorEvents', checked: notificationEventTypes.minorEvents },
         { name: 'Road Conditions', tooltip: tooltipRoadConditions, value: 'roadConditions', checked: notificationEventTypes.roadConditions },
-        // { name: 'Commercial vehicle chain-ups in effect', tooltip: tooltipCommercial, value: '' },
+        { name: 'Chain-ups in effect', tooltip: tooltipCommercial, value: 'chainUps', checked: notificationEventTypes.chainUps },
 
       ].map(({ name, tooltip, value, checked }) => (
         <div key={name}>

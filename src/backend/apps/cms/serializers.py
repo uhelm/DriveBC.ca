@@ -1,10 +1,7 @@
-from pathlib import Path
-
+from apps.cms.models import Advisory, Bulletin, EmergencyAlert, SubPage
+from config.settings import env
 from rest_framework import serializers
 from wagtail.templatetags.wagtailcore_tags import richtext
-
-from apps.cms.models import Advisory, Bulletin, SubPage
-
 
 CMS_FIELDS = [
     "live",
@@ -20,13 +17,18 @@ CMS_FIELDS = [
 
 
 class CMSSerializer(serializers.ModelSerializer):
-
     subpages = serializers.SerializerMethodField()
 
     def get_host(self):
+        # DBC22-4580: Use frontend URL if it doesn't contain ports
+        frontend_url = env('FRONTEND_BASE_URL')
+        if frontend_url and not frontend_url.endswith(':3000/'):
+            return frontend_url
+
+        # Local environment fallback
         request = self.context.get("request")
         prefix = "https://" if request and request.is_secure() else "http://"
-        return prefix + request.get_host() if request else 'localhost:8000'
+        return prefix + request.get_host() + '/' if request else 'localhost:8000'
 
     # get rendered html elements and access static media folder
     def get_richtext(self, body):
@@ -38,11 +40,11 @@ class CMSSerializer(serializers.ModelSerializer):
         res = "\n".join(blocks)
         res = res.replace(
             'href="/drivebc-cms',
-            'href="' + self.get_host() + '/drivebc-cms'
+            'href="' + self.get_host() + 'drivebc-cms'
         )
         res = res.replace(
             'src="/media',
-            'src="' + self.get_host() + '/media'
+            'src="' + self.get_host() + 'media'
         )
         return res
 
@@ -79,9 +81,13 @@ class AdvisoryTestSerializer(CMSSerializer):
 class AdvisorySerializer(AdvisoryTestSerializer):
     body = serializers.SerializerMethodField()
     url_path = serializers.SerializerMethodField()
+    display_category = serializers.SerializerMethodField()
 
     def get_body(self, obj):
         return self.get_richtext(obj.body)
+
+    def get_display_category(self, obj):
+        return 'advisory'
 
 
 # Serializer with no method fields for unit tests
@@ -101,3 +107,16 @@ class BulletinSerializer(BulletinTestSerializer):
     def get_body(self, obj):
         return self.get_richtext(obj.body)
 
+
+# Serializer with no method fields for unit tests
+class EmergencyAlertTestSerializer(CMSSerializer):
+    class Meta:
+        model = EmergencyAlert
+        fields = "__all__"
+
+
+class EmergencyAlertSerializer(EmergencyAlertTestSerializer):
+    alert = serializers.SerializerMethodField()
+
+    def get_alert(self, obj):
+        return self.get_richtext(obj.alert)

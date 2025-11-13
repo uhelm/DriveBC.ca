@@ -1,5 +1,6 @@
 // React
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect } from 'react';
+
 // Third party packages
 import InfiniteScroll from 'react-infinite-scroll-component';
 
@@ -12,38 +13,29 @@ import './CameraList.scss';
 
 export default function CameraList(props) {
   // Props
-  const { cameras, showLoader, enableHighwayFilter } = props;
+  const { cameras, onscreenCameras, setOnscreenCameras, showLoader } = props;
 
   // Contexts
   const { camsContext } = useContext(CamsContext);
 
-  // UseState hooks
-  const [displayedCameras, setDisplayedCameras] = useState([]);
-
   // UseEffect hooks and data functions
   const getDisplayedCameras = (length) => {
-    // check for currently selected Highway from highway filter and process
-    let filteredCameras = cameras;
-    if (enableHighwayFilter && camsContext.highwayFilterKey) {
-      filteredCameras = cameras.filter((camera) => (camera.highway_display === camsContext.highwayFilterKey));
-    }
-
     if (!length) { camsContext.displayLength += 4; }
-    const shown = filteredCameras.slice(0, length ? length : camsContext.displayLength);
-    setDisplayedCameras(shown);
+    const shown = cameras.slice(0, length ? length : camsContext.displayLength);
+    setOnscreenCameras(shown);
   };
 
   useEffect(() => {
-    if (cameras) { // Do nothing until cameras are processed
+    if (cameras && cameras.length > 0) { // Do nothing until cameras are processed
       getDisplayedCameras(camsContext.displayLength);
     }
-  }, [cameras, camsContext.highwayFilterKey]);
+  }, [cameras]);
 
   // Rendering
   const groupDisplayedCameras = () => {
     // Group adjacent cams on the same road into  arrays
     const groups = [];
-    displayedCameras.forEach((cam) => {
+    onscreenCameras.forEach((cam) => {
       const highway = cam.highway_display;
       if (groups.length == 0 || groups[groups.length - 1]['highway'] !== highway) {
         groups.push({
@@ -70,18 +62,31 @@ export default function CameraList(props) {
   }
 
   const getHasMore = () => {
-    return displayedCameras.length < (cameras ? cameras.length : 0);
+    return onscreenCameras.length < (cameras ? cameras.length : 0);
   }
 
-  return (
-    <div className="camera-list">
-      <InfiniteScroll
-        dataLength={camsContext.displayLength}
-        next={getDisplayedCameras}
-        hasMore={getHasMore}>
+  const getCameraList = () => {
+    return cameras && cameras.length > 0 && (
+      <div className="camera-list">
+        <InfiniteScroll
+          dataLength={camsContext.displayLength}
+          next={getDisplayedCameras}
+          hasMore={getHasMore}
+          scrollableTarget="main">
 
-        {renderHighways()}
-      </InfiniteScroll>
-    </div>
-  );
+          {renderHighways()}
+        </InfiniteScroll>
+      </div>
+    );
+  };
+
+  const getLoader = () => {
+    return (
+      <div className="camera-list">
+        <HighwayGroup key={`loading`} highway={'loading'} cams={[null, null, null]} showLoader={showLoader}/>
+      </div>
+    );
+  };
+
+  return showLoader ? getLoader() : getCameraList();
 }

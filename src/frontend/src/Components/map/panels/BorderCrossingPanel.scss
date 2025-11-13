@@ -5,14 +5,9 @@
   &--border-crossing {
     .popup__title {
       background-color: $Blue10;
-      border-top: 4px solid $BC-Blue;
-
-      &__icon {
-        background: $BC-Blue;
-      }
 
       .name {
-        color: $Type-Primary;
+        color: $Blue90;
       }
     }
 
@@ -23,6 +18,12 @@
         .name {
           color: $BC-Blue;
           font-size: 2rem;
+          margin-bottom: 0;
+        }
+
+        .schedule_url {
+          font-size: 0.875rem;
+          margin-bottom: 1rem;
         }
 
         .delays {
@@ -37,15 +38,11 @@
           margin-bottom: 0;
           display: flex;
 
-          span, p {
+          & > span, p {
             font-size: 0.875rem;
             color: $Grey80;
           }
-
-          .updated {
-            margin-right: 1ch;
-          }
-
+          
           .friendly-time {
             margin-left: .2rem;
           }
@@ -99,7 +96,7 @@
             };
 
             &.waiting {
-              background-color: $Grey60;
+              background-color: $Grey40;
               color: $Grey80;
             }
           }
@@ -124,7 +121,7 @@
         text-align: center;
 
         a {
-          margin-left: 1ch;
+          margin-left: 0.5ch;
         }
       }
     }

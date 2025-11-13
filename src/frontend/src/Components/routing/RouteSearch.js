@@ -1,5 +1,5 @@
 // React
-import React, { useCallback, useEffect, useRef, forwardRef } from 'react';
+import React, {useCallback, useEffect, useRef, forwardRef, useContext} from 'react';
 import { useSelector, useDispatch } from 'react-redux'
 import { memoize } from 'proxy-memoize'
 
@@ -16,7 +16,8 @@ import {
   updateSearchLocationFrom,
   updateSearchLocationTo, clearRouteDistance
 } from '../../slices/routesSlice'
-import { removeOverlays } from "../map/helpers";
+import { fitMap, removeOverlays } from "../map/helpers";
+import { MapContext } from "../../App";
 import LocationSearch from './LocationSearch.js';
 import NoRouteFound from './NoRouteFound';
 
@@ -34,9 +35,14 @@ import Spinner from 'react-bootstrap/Spinner';
 import './RouteSearch.scss';
 
 const RouteSearch = forwardRef((props, ref) => {
-  const { showFilterText, showSpinner, onShowSpinnerChange, mapRef, myLocation } = props;
+  // Props
+  const { showFilterText, showSpinner, onShowSpinnerChange, mapRef, myLocation, mapView, resetClickedStates } = props;
 
-  const [_searchParams, setSearchParams] = useSearchParams();
+  // Routing
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Context
+  const { mapContext, setMapContext } = useContext(MapContext);
 
   // Redux
   const dispatch = useDispatch();
@@ -55,9 +61,27 @@ const RouteSearch = forwardRef((props, ref) => {
   const isInitialMount = useRef(true);
   const isInitialMountSpinner = useRef(true);
 
-  // useEffect hooks
-  useEffect(() => {
-    if (isInitialMount.current) { // Do nothing on first load
+  // Helpers
+  const updateSearchParams = () => {
+    if (searchLocationFrom && searchLocationFrom.length > 0) {
+      searchParams.set('start', searchLocationFrom[0].label);
+    } else {
+      searchParams.set('start', null);
+    }
+
+    if (searchLocationTo && searchLocationTo.length > 0) {
+      searchParams.set('end', searchLocationTo[0].label);
+    } else {
+      searchParams.set('end', null);
+    }
+
+    setSearchParams(searchParams, { replace: true });
+  }
+
+  const updateSearch = () => {
+    updateSearchParams();
+
+    if (isInitialMount.current) { // Only update search params on first load
       isInitialMount.current = false;
       return;
     }
@@ -70,6 +94,10 @@ const RouteSearch = forwardRef((props, ref) => {
       dispatch(clearSelectedRoute());
       removeOverlays(mapRef);
     }
+  }
+
+  useEffect(() => {
+    updateSearch();
   }, [searchLocationFrom, searchLocationTo]);
 
   useEffect(() => {
@@ -79,17 +107,31 @@ const RouteSearch = forwardRef((props, ref) => {
     }
 
     if (showSpinner) {
+      // Reset clicked state on map before fetching new route
+      if (resetClickedStates) {
+        resetClickedStates();
+      }
+
       const firstPoint = searchLocationFrom[0].geometry.coordinates.toString();
       const secondPoint = searchLocationTo[0].geometry.coordinates.toString();
 
       getRoutes(firstPoint, secondPoint, favRoutes).then((routes) => {
         // Select shortest route if the distance matches
-        if (routes.length > 1 && shortenToOneDecimal(parseFloat(routeDistance)) === shortenToOneDecimal(routes[1].distance)) {
+        if (routes.length > 1 && routeDistance === shortenToOneDecimal(routes[1].distance)) {
           dispatch(updateSelectedRoute(routes[1]));
 
         // Select fastest route by default
         } else {
           dispatch(updateSelectedRoute(routes[0]));
+        }
+
+        // Fit map on routes only after user input
+        if (mapContext && mapContext.pendingRouteFit) {
+          fitMap(routes, mapView);
+          setMapContext({
+            ...mapContext,
+            pendingRouteFit: false
+          });
         }
 
         dispatch(clearRouteDistance());
@@ -101,7 +143,11 @@ const RouteSearch = forwardRef((props, ref) => {
 
   // Handlers
   const swapHandler = () => {
-    setSearchParams({});
+    searchParams.delete('type');
+    searchParams.delete('id');
+    searchParams.delete('display_category');
+    setSearchParams(searchParams, { replace: true });
+
     dispatch(updateSearchLocationFrom(searchLocationTo));
     dispatch(updateSearchLocationTo(searchLocationFrom));
   }
@@ -124,6 +170,8 @@ const RouteSearch = forwardRef((props, ref) => {
             location={searchLocationFrom}
             myLocation={myLocation}
             action={updateSearchLocationFrom}
+            // Select by default if from location is empty
+            selectByDefault={searchLocationFrom.length === 0 && !searchParams.get('start')}
             inputProps={{
               'aria-label': 'input field for starting location search',
               'id': 'location-search-starting-id',
@@ -140,6 +188,8 @@ const RouteSearch = forwardRef((props, ref) => {
             placeholder={'Search destination location'}
             location={searchLocationTo}
             action={updateSearchLocationTo}
+            // Select by default if from location exists and to location is empty
+            selectByDefault={searchLocationFrom.length > 0 && searchLocationTo.length === 0 && !searchParams.get('end')}
             inputProps={{
               'aria-label': 'input field for ending location search',
               'id': 'location-search-ending-id',

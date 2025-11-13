@@ -1,6 +1,6 @@
 from apps.event.enums import EVENT_DISPLAY_CATEGORY
 from apps.event.helpers import get_display_category
-from apps.shared.models import BaseModel
+from apps.shared.models import Area, BaseModel
 from django.contrib.gis.db import models
 
 
@@ -24,6 +24,7 @@ class Event(BaseModel):
     route_at = models.CharField(max_length=128)
     route_from = models.CharField(max_length=128)
     route_to = models.CharField(max_length=128, blank=True)
+    area = models.ManyToManyField(Area, blank=True)
 
     # CARS API info
     highway_segment_names = models.CharField(max_length=256, blank=True, default='')
@@ -47,10 +48,10 @@ class Event(BaseModel):
     timezone = models.CharField(max_length=32, null=True, blank=True)
 
     # Display category for emails
-    display_category = models.CharField(max_length=32, blank=True, default='')
+    display_category = models.CharField(max_length=32, blank=True, default='', db_index=True)
 
     def save(self, *args, **kwargs):
-        uses_polygon = self.event_type in ['ROAD_CONDITION']  # chain up not used for now
+        uses_polygon = self.event_type in ['ROAD_CONDITION', 'WEATHER_CONDITION']
         width = 1500 if self.event_type == 'CHAIN_UP' else 2000
 
         # For road conditions or chain up events with linestring geometry
@@ -69,10 +70,14 @@ class Event(BaseModel):
 
         super().save(*args, **kwargs)
 
+    # Workaround for wagtail logging error during unit tests
+    def get_admin_display_title(self):
+        return 'event'
+
     @property
     def display_category_title(self):
         if self.display_category == EVENT_DISPLAY_CATEGORY.FUTURE_DELAYS:
-            return 'Future Delays'
+            return 'Future Delay'
         elif self.display_category == EVENT_DISPLAY_CATEGORY.CLOSURE:
             return 'Closure'
         elif self.display_category == EVENT_DISPLAY_CATEGORY.ROAD_CONDITION:
@@ -80,6 +85,6 @@ class Event(BaseModel):
         elif self.display_category == EVENT_DISPLAY_CATEGORY.CHAIN_UP:
             return 'Chain Up'
         elif self.display_category == EVENT_DISPLAY_CATEGORY.MAJOR_DELAYS:
-            return 'Major Delays'
+            return 'Major Delay'
         else:
-            return 'Minor Delays'
+            return 'Minor Delay'

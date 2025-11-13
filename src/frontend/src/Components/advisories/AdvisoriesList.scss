@@ -1,4 +1,5 @@
 @import "../../styles/variables.scss";
+
 .advisories-list {
   list-style-type: none;
   padding-left: 0;
@@ -25,6 +26,7 @@
     }
 
     &__content {
+      width: 100%;
       .advisory-li-title-container {
         .advisory-li-title {
           color: $Type-Link;
@@ -35,6 +37,16 @@
 
           &-container {
             width: 100%;
+          }
+        }
+
+        .view-details-btn {
+          width: 100%;
+          font-weight: 700;
+          color: $ViewDetailsText;
+
+          svg {
+            margin-left: 0.5rem;
           }
         }
       }
@@ -50,7 +62,7 @@
     display: flex;
     align-items: center;
 
-    .advisory-li-state, .friendly-time, .formatted-date {
+    .friendly-time, .formatted-date {
       margin-left: 0.5ch;
     }
 
@@ -58,7 +70,7 @@
       margin-left: 0.5ch;
     }
 
-    .friendly-time-text, .formatted-date {
+    .advisory-li-state, .friendly-time-text, .formatted-date {
       color: $Grey80;
       font-size: 0.875rem;
       line-height: 1.5;

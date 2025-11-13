@@ -9,6 +9,7 @@ from apps.event.serializers import CarsEventSerializer
 from apps.feed.constants import (
     CURRENT_WEATHER,
     CURRENT_WEATHER_STATIONS,
+    DISTRICT_BOUNDARIES,
     DIT,
     FORECAST_WEATHER,
     INLAND_FERRY,
@@ -17,6 +18,7 @@ from apps.feed.constants import (
     REGIONAL_WEATHER_AREAS,
     REST_STOP,
     WEBCAM,
+    WILDFIRE,
 )
 from apps.feed.serializers import (
     CarsClosureSerializer,
@@ -28,8 +30,11 @@ from apps.feed.serializers import (
     WebcamAPISerializer,
     WebcamFeedSerializer,
 )
+from apps.shared.serializers import DistrictAPISerializer
+from apps.wildfire.serializers import WildfireAreaSerializer, WildfirePointSerializer
 from django.conf import settings
 from django.contrib.gis.geos import Point
+from django.core.cache import cache
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -106,6 +111,12 @@ class FeedClient:
             REST_STOP: {
                 "base_url": settings.DRIVEBC_REST_STOP_API_BASE_URL,
             },
+            DISTRICT_BOUNDARIES: {
+                "base_url": settings.DRIVEBC_OPENMAPS_API_URL,
+            },
+            WILDFIRE: {
+                "base_url": settings.DRIVEBC_OPENMAPS_API_URL,
+            },
         }
 
     def _get_auth_headers(self, resource_type):
@@ -142,9 +153,7 @@ class FeedClient:
         )
         return self._get_response_data_or_raise(response)
 
-    # TODO: make client manage token by expiry so that repeated calls to this
-    # method either return a currently valid token or fetch a fresh one
-    def get_access_token(self):
+    def get_new_weather_access_token(self):
         """
         Return a bearer token
 
@@ -164,7 +173,24 @@ class FeedClient:
 
         response = requests.post(token_url, data=token_params)
         response.raise_for_status()
-        return response.json().get("access_token")
+
+        token = response.json().get("access_token")
+        cache.set('weather_access_token', token, timeout=270)  # Cache for slightly less than 5 minutes
+
+        return token
+
+    def make_weather_request(self, endpoint, mock_token=None):
+        token = mock_token or cache.get('weather_access_token') or self.get_new_weather_access_token()
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = requests.get(endpoint, headers=headers)
+        if not mock_token and response.status_code == 401 and 'token expired' in response.text.lower():
+            # Token expired, get a new one and retry
+            new_token = self.get_new_weather_access_token()
+            new_headers = {"Authorization": f"Bearer {new_token}"}
+            response = requests.get(endpoint, headers=new_headers)
+
+        return response
 
     def get_single_feed(self, dbo, resource_type, resource_name, serializer_cls, as_serializer=False):
         """
@@ -286,13 +312,7 @@ class FeedClient:
         area_code_endpoint = settings.DRIVEBC_SAWSX_API_BASE_URL + '/ec/list/fcstareas'
 
         try:
-            access_token = self.get_access_token()
-            headers = {"Authorization": f"Bearer {access_token}"}
-        except requests.RequestException as e:
-            return Response({"error": f"Error obtaining access token: {str(e)}"}, status=500)
-
-        try:
-            response = requests.get(area_code_endpoint, headers=headers)
+            response = self.make_weather_request(area_code_endpoint)
             response.raise_for_status()
             json_response = response.json()
             json_objects = []
@@ -302,18 +322,11 @@ class FeedClient:
                 if entry.get('AreaType') != 'ECHIGHELEVN':
                     continue
 
-                # Get fresh token in case earlier token has expired
-                try:
-                    access_token = self.get_access_token()
-                    headers = {"Authorization": f"Bearer {access_token}"}
-                except requests.RequestException as e:
-                    return Response({"error": f"Error obtaining access token: {str(e)}"}, status=500)
-
                 area_code = entry.get("AreaCode")
                 api_endpoint = settings.DRIVEBC_SAWSX_API_BASE_URL + f'/ec/hefforecast/{area_code}'
 
                 try:
-                    response = requests.get(api_endpoint, headers=headers)
+                    response = self.make_weather_request(api_endpoint)
                     if response.status_code == 204:
                         continue  # empty response, continue with next entry
                     data = response.json()
@@ -347,7 +360,9 @@ class FeedClient:
                             logger.error(f"Issued UTC sent by {area_code} as {issued}")
                             issued = None
 
-                    source = data.get('ForecastGroup', {}).get('Forecasts', [])
+                    forecast_group = data.get('ForecastGroup', {}) or {}
+                    source = forecast_group.get('Forecasts', []) or []
+
                     forecasts = []
                     for forecast in source:
                         period = forecast.get('Period', {})
@@ -377,25 +392,14 @@ class FeedClient:
             return Response("Error fetching data from weather API", status=500)
 
     # Current Weather
-    def get_current_weather_list_feed(self, resource_type, resource_name, serializer_cls, params=None):
+    def get_current_weather_list_feed(self, serializer_cls, token):
         """Get data feed for list of objects."""
-        area_code_endpoint = settings.DRIVEBC_WEATHER_CURRENT_STATIONS_API_BASE_URL
-
-        try:
-            access_token = self.get_access_token()
-            headers = {"Authorization": f"Bearer {access_token}"}
-
-        except requests.RequestException as e:
-            return Response({"error": f"Error obtaining access token: {str(e)}"}, status=500)
-
-        external_api_url = area_code_endpoint
-        headers = {"Authorization": f"Bearer {access_token}"}
 
         try:
             # Delete existing VMS signs
             serializer_cls.Meta.model.objects.filter(weather_station_name__contains='VMS').delete()
 
-            response = requests.get(external_api_url, headers=headers)
+            response = self.make_weather_request(settings.DRIVEBC_WEATHER_CURRENT_STATIONS_API_BASE_URL, token)
             response.raise_for_status()
             json_response = response.json()
             json_objects = []
@@ -405,15 +409,9 @@ class FeedClient:
                 station_number = station.get("WeatherStationNumber")
                 forecast_endpoint = settings.DRIVEBC_WEATHER_FORECAST_API_BASE_URL + f"/{station_number}"
                 api_endpoint = settings.DRIVEBC_WEATHER_CURRENT_API_BASE_URL + f"{station_number}"
-                # get fresh token to avoid previous token expiring
-                try:
-                    access_token = self.get_access_token()
-                    headers = {"Authorization": f"Bearer {access_token}"}
-                except requests.RequestException as e:
-                    return Response({"error": f"Error obtaining access token: {str(e)}"}, status=500)
 
                 try:
-                    response = requests.get(forecast_endpoint, headers=headers)
+                    response = self.make_weather_request(forecast_endpoint, token)
                     if response.status_code != 204:
                         hourly_forecast_data = response.json()
                         hourly_forecast_group = hourly_forecast_data.get("HourlyForecasts") or []
@@ -421,7 +419,7 @@ class FeedClient:
                     logger.error(f"Error making API call for Area Code {station_number}: {e}")
 
                 try:
-                    response = requests.get(api_endpoint, headers=headers)
+                    response = self.make_weather_request(api_endpoint, token)
                     data = response.json()
                     datasets = data.get("Datasets") if data else None
 
@@ -519,11 +517,8 @@ class FeedClient:
         except requests.RequestException:
             return Response("Error fetching data from weather API", status=500)
 
-    def get_current_weather_list(self):
-        return self.get_current_weather_list_feed(
-            CURRENT_WEATHER, 'currentweather', CurrentWeatherSerializer,
-            {"format": "json", "limit": 500}
-        )
+    def get_current_weather_list(self, token):
+        return self.get_current_weather_list_feed(CurrentWeatherSerializer, token)
 
     # Rest Stop
     def get_rest_stop_list_feed(self, resource_type, resource_name, serializer_cls, params=None):
@@ -567,4 +562,50 @@ class FeedClient:
         return self.get_rest_stop_list_feed(
             REST_STOP, 'reststop', RestStopSerializer,
             {"format": "json", "limit": 500}
+        )
+
+    # District Boundaries
+    def get_district_list(self):
+        return self.get_list_feed(
+            DISTRICT_BOUNDARIES,
+            'geo/pub/WHSE_ADMIN_BOUNDARIES.TADM_MOT_DISTRICT_BNDRY_POLY/ows',
+            DistrictAPISerializer,
+            {
+                "service": "WFS",
+                "request": "GetFeature",
+                "typeName": "pub:WHSE_ADMIN_BOUNDARIES.TADM_MOT_DISTRICT_BNDRY_POLY",
+                "feature_info_type": "text/plain",
+                "srsName": "EPSG:4326",
+                "outputFormat": "json",
+            }
+        )
+
+    def get_wildfire_area_list(self):
+        return self.get_list_feed(
+            WILDFIRE,
+            'geo/ows',
+            WildfireAreaSerializer,
+            {
+                "service": "WFS",
+                "version": "1.1.0",
+                "request": "GetFeature",
+                "typeName": "pub:WHSE_LAND_AND_NATURAL_RESOURCE.PROT_CURRENT_FIRE_POLYS_SP",
+                "srsName": "EPSG:4326",
+                "outputFormat": "json",
+            }
+        )
+
+    def get_wildfire_location_list(self):
+        return self.get_list_feed(
+            WILDFIRE,
+            'geo/ows',
+            WildfirePointSerializer,
+            {
+                "service": "WFS",
+                "version": "1.1.0",
+                "request": "GetFeature",
+                "typeName": "pub:WHSE_LAND_AND_NATURAL_RESOURCE.PROT_CURRENT_FIRE_PNTS_SP",
+                "srsName": "EPSG:4326",
+                "outputFormat": "json",
+            }
         )

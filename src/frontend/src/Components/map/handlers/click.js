@@ -1,11 +1,14 @@
+// External imports
+import { fromLonLat } from "ol/proj";
+
+// Internal imports
+import { isRestStopClosed } from '../../data/restStops.js';
 import { setEventStyle, setZoomPan } from '../helpers';
 import trackEvent from '../../shared/TrackEvent.js';
 
-import { isRestStopClosed } from '../../data/restStops.js';
-
 // Styling
 import {
-  cameraStyles,
+  coastalFerryStyles,
   ferryStyles,
   roadWeatherStyles,
   regionalStyles,
@@ -15,7 +18,11 @@ import {
   restStopTruckStyles,
   restStopTruckClosedStyles,
   routeStyles,
-  borderCrossingStyles
+  borderCrossingStyles,
+  regionalWarningStyles,
+  advisoryStyles,
+  wildfireCentroidStyles,
+  wildfireAreaStyles
 } from '../../data/featureStyleDefinitions.js';
 
 // Click states
@@ -44,7 +51,7 @@ export const resetClickedStates = (
   ) {
     switch (clickedFeatureRef.current.get('type')) {
       case 'camera':
-        clickedFeatureRef.current.setStyle(cameraStyles['static']);
+        clickedFeatureRef.current.setCameraStyle('static');
         clickedFeatureRef.current.set('clicked', false);
         updateClickedFeature(null);
         break;
@@ -70,9 +77,12 @@ export const resetClickedStates = (
         break;
       }
       case 'ferry':
-        clickedFeatureRef.current.setStyle(ferryStyles['static']);
-        clickedFeatureRef.current.set('clicked', false);
-        updateClickedFeature(null);
+        {
+          const styles = clickedFeatureRef.current.get('coastal') ? coastalFerryStyles : ferryStyles;
+          clickedFeatureRef.current.setStyle(styles['static']);
+          clickedFeatureRef.current.set('clicked', false);
+          updateClickedFeature(null);
+        }
         break;
       case 'currentWeather':
         clickedFeatureRef.current.setStyle(roadWeatherStyles['static']);
@@ -80,7 +90,11 @@ export const resetClickedStates = (
         updateClickedFeature(null);
         break;
       case 'regionalWeather':
-        clickedFeatureRef.current.setStyle(regionalStyles['static']);
+        clickedFeatureRef.current.setStyle(
+          clickedFeatureRef.current.get('warnings') ?
+          regionalWarningStyles['static'] :
+          regionalStyles['static']
+        );
         clickedFeatureRef.current.set('clicked', false);
         updateClickedFeature(null);
         break;
@@ -118,19 +132,57 @@ export const resetClickedStates = (
         updateClickedFeature(null);
         break;
       }
-      case 'route':
-        clickedFeatureRef.current.setStyle(routeStyles['static']);
-        clickedFeatureRef.current.set('clicked', false);
-        updateClickedFeature(null);
-        break;
       case 'borderCrossing':
         clickedFeatureRef.current.setStyle(borderCrossingStyles['static']);
         clickedFeatureRef.current.set('clicked', false);
         updateClickedFeature(null);
         break;
+      case 'advisory':
+        clickedFeatureRef.current.setStyle(advisoryStyles['static']);
+        clickedFeatureRef.current.set('clicked', false);
+        updateClickedFeature(null);
+        break;
+      case 'wildfire':
+        {
+          const isCentroid = clickedFeatureRef.current.getGeometry().getType() === 'Point';
+          clickedFeatureRef.current.setStyle((isCentroid ? wildfireCentroidStyles['static'] : wildfireAreaStyles['static']));
+          clickedFeatureRef.current.set('clicked', false);
+
+          // Alt feature
+          clickedFeatureRef.current.get('altFeature').setStyle((isCentroid ? wildfireAreaStyles['static'] : wildfireCentroidStyles['static']));
+          clickedFeatureRef.current.get('altFeature').set('clicked', false);
+
+          updateClickedFeature(null);
+      }
+        break;
     }
   }
 };
+
+const getVisibleNearbyObjectsCount = (mapContext, feature) => {
+  const layers = ['closures', 'majorEvents', 'minorEvents', 'futureEvents', 'roadConditions', 'chainUps', 'weather'];
+
+  let count = feature.get('nearby_objs').cameras;
+  for (const layer of layers) {
+    if (mapContext.visible_layers[layer] && feature.get('nearby_objs')[layer]) {
+      count += feature.get('nearby_objs')[layer];
+    }
+  }
+
+  return count;
+}
+
+const getDefaultZoom = (nearbyCount) => {
+  if (nearbyCount > 2) {
+    return 13.5;
+  }
+
+  if (nearbyCount > 0) {
+    return 12;
+  }
+
+  return 9;
+}
 
 const camClickHandler = (
   feature,
@@ -139,7 +191,8 @@ const camClickHandler = (
   mapView,
   isCamDetail,
   loadCamDetails,
-  updateReferenceFeature
+  updateReferenceFeature,
+  mapContext
 ) => {
   resetClickedStates(
     feature,
@@ -149,19 +202,36 @@ const camClickHandler = (
   );
 
   // set new clicked camera feature
-  feature.setStyle(cameraStyles['active']);
-  feature.setProperties({ clicked: true }, true);
+  feature.setCameraStyle('active');
+  feature.set('clicked', true, true);
+  feature.set('unread', false);
 
   updateClickedFeature(feature);
 
   if (isCamDetail) {
-    setZoomPan(mapView, null, feature.getGeometry().getCoordinates());
-    loadCamDetails(feature.getProperties());
+    if (feature.get('focusCamera')) {
+      const zoom = feature.get('zoom');
+      const pan = feature.get('pan');
+
+      const nearbyCount = getVisibleNearbyObjectsCount(mapContext, feature);
+      setZoomPan(
+        mapView,
+        zoom ? zoom : getDefaultZoom(nearbyCount),
+        pan ? fromLonLat(pan.split(",").map(Number)) : feature.getGeometry().getCoordinates()
+      );
+
+      feature.unset('focusCamera');
+
+    } else {
+      setZoomPan(mapView, null, feature.getGeometry().getCoordinates());
+      loadCamDetails(feature.getProperties());
+    }
+
     updateReferenceFeature(feature);
   }
 };
 
-const eventClickHandler = (
+export const eventClickHandler = (
   feature,
   clickedFeatureRef,
   updateClickedFeature,
@@ -191,7 +261,7 @@ const eventClickHandler = (
   updateClickedFeature(feature);
 };
 
-const ferryClickHandler = (
+export const ferryClickHandler = (
   feature,
   clickedFeatureRef,
   updateClickedFeature,
@@ -205,8 +275,10 @@ const ferryClickHandler = (
     isCamDetail,
   );
 
+  const styles = feature.get('coastal') ? coastalFerryStyles : ferryStyles;
+
   // set new clicked ferry feature
-  feature.setStyle(ferryStyles['active']);
+  feature.setStyle(styles['active']);
   feature.setProperties({ clicked: true }, true);
   updateClickedFeature(feature);
 };
@@ -225,7 +297,7 @@ const weatherClickHandler = (
     isCamDetail,
   );
 
-  // set new clicked ferry feature
+  // set new clicked local weather feature
   feature.setStyle(roadWeatherStyles['active']);
   feature.setProperties({ clicked: true }, true);
   updateClickedFeature(feature);
@@ -245,8 +317,9 @@ const regionalClickHandler = (
     isCamDetail,
   );
 
-  // set new clicked ferry feature
-  feature.setStyle(regionalStyles['active']);
+  // set new clicked regional weather feature
+  const warnings = feature.get('warnings');
+  feature.setStyle(warnings ? regionalWarningStyles['active'] : regionalStyles['active']);
   feature.setProperties({ clicked: true }, true);
   updateClickedFeature(feature);
 };
@@ -265,7 +338,7 @@ const hefClickHandler = (
     isCamDetail,
   );
 
-  // set new clicked ferry feature
+  // set new clicked hef weather feature
   feature.setStyle(hefStyles['active']);
   feature.setProperties({ clicked: true }, true);
   updateClickedFeature(feature);
@@ -322,7 +395,6 @@ const routeClickHandler = (
   // set new clicked route feature
   feature.set('clicked', true);
   feature.setStyle(routeStyles['active']);
-  updateClickedFeature(feature);
 };
 
 const borderCrossingClickHandler = (
@@ -339,11 +411,58 @@ const borderCrossingClickHandler = (
     isCamDetail,
   );
 
-  // set new clicked ferry feature
+  // set new clicked border crossing feature
   feature.setStyle(borderCrossingStyles['active']);
   feature.setProperties({ clicked: true }, true);
   updateClickedFeature(feature);
 };
+
+export const advisoryClickHandler = (
+  feature,
+  clickedFeatureRef,
+  updateClickedFeature,
+  isCamDetail,
+) => {
+  // reset previous clicked feature
+  resetClickedStates(
+    feature,
+    clickedFeatureRef,
+    updateClickedFeature,
+    isCamDetail,
+  );
+
+  // set new clicked advisory feature
+  feature.setStyle(advisoryStyles['active']);
+  feature.setProperties({ clicked: true }, true);
+  updateClickedFeature(feature);
+};
+
+export const wildfireClickHandler = (
+  feature,
+  clickedFeatureRef,
+  updateClickedFeature,
+  isCamDetail,
+) => {
+  // reset previous clicked feature
+  resetClickedStates(
+    feature,
+    clickedFeatureRef,
+    updateClickedFeature,
+    isCamDetail,
+  );
+
+  const isCentroidFeature = feature.getGeometry().getType() === 'Point';
+
+  feature.setStyle((isCentroidFeature ? wildfireCentroidStyles['active'] : wildfireAreaStyles['active']));
+  feature.set('clicked', true);
+
+  // alt feature
+  feature.get('altFeature').setStyle((isCentroidFeature ? wildfireAreaStyles['active'] : wildfireCentroidStyles['active']));
+  feature.get('altFeature').set('clicked', true);
+
+  updateClickedFeature(feature);
+};
+
 
 export const pointerClickHandler = (
   features,
@@ -352,7 +471,9 @@ export const pointerClickHandler = (
   mapView,
   isCamDetail,
   loadCamDetails,
-  updateReferenceFeature
+  updateReferenceFeature,
+  updateRouteDisplay,
+  mapContext
 ) => {
   if (features.length) {
     const clickedFeature = features[0];
@@ -371,7 +492,8 @@ export const pointerClickHandler = (
           mapView,
           isCamDetail,
           loadCamDetails,
-          updateReferenceFeature
+          updateReferenceFeature,
+          mapContext
         );
         return;
 
@@ -465,6 +587,13 @@ export const pointerClickHandler = (
           updateClickedFeature,
           isCamDetail,
         );
+        if (clickedFeature.getProperties().type === 'largeRestStop') {
+          const currentUrl = window.location.href;
+          const newUrl = currentUrl.replace("restStop", "largeRestStop");
+          window.history.replaceState(null, "", newUrl);
+          mapContext.visible_layers.restStops = false;
+          mapContext.visible_layers.largeRestStops = true;
+        }
         return;
 
       case 'route':
@@ -479,6 +608,8 @@ export const pointerClickHandler = (
           clickedFeatureRef,
           updateClickedFeature,
         );
+
+        updateRouteDisplay(clickedFeature.get('route'));
         return;
 
       case 'borderCrossing':
@@ -493,6 +624,37 @@ export const pointerClickHandler = (
           clickedFeatureRef,
           updateClickedFeature,
         );
+        return;
+
+      case 'advisory':
+        trackEvent(
+          'click',
+          'map',
+          'advisory',
+          'selected advisory',
+        );
+        advisoryClickHandler(
+          clickedFeature,
+          clickedFeatureRef,
+          updateClickedFeature,
+        );
+        return;
+
+      case 'wildfire':
+        trackEvent(
+          'click',
+          'map',
+          'wildfire',
+          'selected wildfire',
+        );
+        wildfireClickHandler(
+          clickedFeature,
+          clickedFeatureRef,
+          updateClickedFeature,
+        );
+        return;
+
+      default:
         return;
     }
   }

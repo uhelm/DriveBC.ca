@@ -1,49 +1,51 @@
 @import "../../../styles/variables";
-
 .popup {
   display: flex;
   flex-direction: column;
   height: 100%;
 
   &__title {
-    background-color: $Blue10;
-    border-top: 4px solid $Info;
-    padding: 1rem;
+    padding: 1rem 3rem 0.75rem 1rem;
+    display: flex;
+    justify-content: space-between;
 
     &__name {
       display: flex;
-      justify-content: space-between;
-      margin-top: 8px;
+
+      svg {
+        margin-right: 8px;
+      }
     }
 
     .name {
       margin-bottom: 0;
-      font-size: 1.25rem;
-      color: $Info;
-    }
-
-    &__icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 6px;
-      background-color: $Info;
-      color: white;
-      display: flex;
-
-      svg {
-        margin: auto;
-      }
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: $BC-Blue;
     }
   }
 
   &__content {
     padding: 1rem 1rem 1.5rem;
 
+    &__shadow-box {
+      background-color: $White;
+      padding: 0.75rem;
+      border-radius: 8px;
+      box-shadow: 0 0.6px 1.8px 0 rgba(0, 0, 0, 0.10), 0 3.2px 7.2px 0 rgba(0, 0, 0, 0.13);
+      margin-top: 0.75rem;
+
+      p {
+        margin-bottom: 0;
+        font-size: 0.875rem;
+      }
+    }
+
     &__title {
 
       .name {
-        font-size: 1.25rem;
-        color: $Info;
+        font-size: 1.5rem;
+        font-weight: 700;
       }
     }
 
@@ -157,7 +159,7 @@
     }
 
     &__description {
-      padding: 1rem 0 0;
+      margin-top: 1.5rem;
     }
 
     &__tools {
@@ -166,34 +168,59 @@
   }
 }
 
-.close-panel {
+.close-panel, .resize-panel {
   position: absolute;
   top: 1.125rem;
   right: 1rem;
   padding: 0;
   min-width: 0;
-  line-height: 1.25rem;
-  height: 2rem;
-  width: 2rem;
   border-radius: 50%;
   background: none;
   border: none;
-  font-size: 1rem;
+  font-size: 0.875rem;
+}
+
+.close-panel {
+  padding: 12px 17px;
+  top: 6px;
+  right: 0;
+  color: $Type-Primary;
+  &:hover {
+    background: lighten($Type-Primary, 70%);
+  }
+}
+
+.resize-panel {
+  &.no-route {
+    right: 3.5rem;
+  }
 }
 
 .close-panel:has(+ .panel-content .popup.closure),
-.close-panel:has(+ .panel-content .popup.major) {
+.close-panel:has(+ .panel-content .popup.major),
+.close-panel:has(+ .panel-content .popup--wildfire),
+.close-panel:has(+ .panel-content .popup.popup--reststop.closed),
+.resize-panel:has(~ .panel-content .popup.closure),
+.resize-panel:has(~ .panel-content .popup.major),
+.resize-panel:has(~ .panel-content .popup--wildfire),
+.resize-panel:has(~ .panel-content .popup.popup--reststop.closed)
+ {
   color: $Error;
-
+  
   &:hover {
     background: lighten($Error, 38%);
   }
 }
 
+
+.close-panel:has(+ .panel-content .popup.popup--reststop.closed) {
+  top: 16px;
+}
+
 .close-panel:has(+ .panel-content .popup.minor),
 .close-panel:has(+ .panel-content .popup.roadConditions),
-.close-panel:has(+ .panel-content .popup.popup--advisories),
-.close-panel:has(+ .popup.popup--advisories) {
+.resize-panel:has(~ .panel-content .popup.minor),
+.resize-panel:has(~ .panel-content .popup.roadConditions) {
   color: $Gold110;
 
   &:hover {
@@ -201,15 +228,38 @@
   }
 }
 
-.close-panel:has(+ .panel-content .popup.popup--camera) {
-  color: $BC-Blue;
+.close-panel:has(+ .panel-content .popup.popup--advisories),
+.close-panel:has(+ .popup.popup--advisories),
+.resize-panel:has(~ .panel-content .popup.popup--advisories),
+.resize-panel:has(~ .popup.popup--advisories) {
+  color: $Advisory-Text;
+ 
+  &:hover {
+    background: lighten($Advisory-Text, 50%);
+  }
+}
+
+.close-panel.close-panel:has(+ .panel-content .popup.chainUps),
+.resize-panel:has(~ .panel-content .popup.chainUps) {
+  color: $Type-Primary;
+  &:hover {
+    background: lighten($Chainups, 20%);
+  }
+}
+
+.close-panel:has(+ .panel-content .popup.popup--camera),
+.close-panel:has(+ .panel-content .popup.popup--border-crossing),
+.resize-panel:has(~ .panel-content .popup.popup--camera),
+.resize-panel:has(~ .panel-content .popup.popup--border-crossing) {
+  color: $Blue90;
 
   &:hover {
     background: lighten($BC-Blue, 70%);
   }
 }
 
-.close-panel:has(+ .panel-content .popup.popup--ferry) {
+.close-panel:has(+ .panel-content .popup.popup--ferry),
+.resize-panel:has(~ .panel-content .popup.popup--ferry) {
   color: $Success;
 
   &:hover {
@@ -217,7 +267,8 @@
   }
 }
 
-.close-panel:has(+ .panel-content .popup.popup--reststop) {
+.close-panel:has(+ .panel-content .popup.popup--reststop),
+.resize-panel:has(~ .panel-content .popup.popup--reststop) {
   color: $Type-reststop;
 
   &:hover {
@@ -225,7 +276,8 @@
   }
 }
 
-.close-panel:has(+ .panel-content .popup--weather){
+.close-panel:has(+ .panel-content .popup--weather),
+.resize-panel:has(~ .panel-content .popup--weather) {
   color: $Type-Primary;
 
   &:hover {

@@ -51,7 +51,7 @@ def access_requested(request):
         msg = EmailMultiAlternatives(
             f'{name} requests access to DriveBC admin',
             text,
-            settings.DRIVEBC_FEEDBACK_EMAIL_DEFAULT,
+            settings.DRIVEBC_FROM_EMAIL_DEFAULT,
             settings.ACCESS_REQUEST_RECEIVERS,
         )
         msg.attach_alternative(html, 'text/html')
@@ -199,7 +199,7 @@ class SendVerificationEmailView(APIView):
         context = {
             'email': request.user.email,
             'verification_url': verification_url,
-            'from_email': settings.DRIVEBC_FEEDBACK_EMAIL_DEFAULT
+            'from_email': settings.DRIVEBC_FROM_EMAIL_DEFAULT
         }
 
         text = render_to_string('email/email_verification.txt', context)
@@ -208,7 +208,7 @@ class SendVerificationEmailView(APIView):
         msg = EmailMultiAlternatives(
             'Please verify your email address to setup email notifications',
             text,
-            settings.DRIVEBC_FEEDBACK_EMAIL_DEFAULT,
+            settings.DRIVEBC_FROM_EMAIL_DEFAULT,
             [request.user.email]
         )
 
@@ -219,6 +219,24 @@ class SendVerificationEmailView(APIView):
         msg.send()
 
         return Response({'message': 'Verification email sent'}, status=status.HTTP_200_OK)
+
+
+class EmailConsentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.consent:  # already have consent, do nothing
+            return Response({'status': status.HTTP_204_NO_CONTENT}, status=status.HTTP_204_NO_CONTENT)
+
+        consent = request.data.get('consent', None)
+        if consent:
+            user.consent = True
+
+        user.attempted_consent = True
+        user.save()
+
+        return Response({'status': status.HTTP_200_OK}, status=status.HTTP_200_OK)
 
 
 class DriveBCUserViewset(mixins.DestroyModelMixin, viewsets.GenericViewSet):

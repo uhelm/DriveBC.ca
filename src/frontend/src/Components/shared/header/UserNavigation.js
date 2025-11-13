@@ -22,6 +22,8 @@ import { useMediaQuery } from '@uidotdev/usehooks';
 // Internal imports
 import { AuthContext } from "../../../App";
 import { addFavoriteCamera } from '../../data/webcams';
+import { getCookie } from "../../../util";
+import { logoutDispatch } from "../../data/account";
 
 // Styling
 import './UserNavigation.scss';
@@ -33,10 +35,12 @@ export default function UserNavigation(props) {
 
   // Redux
   const dispatch = useDispatch();
-  const { favCams, favRoutes, pendingAction } = useSelector(useCallback(memoize(state => ({
+  const { favCams, favRoutes, pendingAction, selectedRoute, searchedRoutes } = useSelector(useCallback(memoize(state => ({
     favCams: state.user.favCams,
     favRoutes: state.user.favRoutes,
     pendingAction: state.user.pendingAction,
+    selectedRoute: state.routes.selectedRoute,
+    searchedRoutes: state.routes.searchedRoutes,
   }))));
 
   // Effects
@@ -85,6 +89,11 @@ export default function UserNavigation(props) {
     })
   };
 
+  /* Handlers */
+  const handleSubmit = (e) => {
+    logoutDispatch(dispatch, selectedRoute, searchedRoutes);
+  };
+
   const largeScreen = useMediaQuery('only screen and (min-width : 768px)');
 
   /* Components */
@@ -99,13 +108,11 @@ export default function UserNavigation(props) {
         <div id="user-menu-header">
           <FontAwesomeIcon id="user-icon" icon={faCircleUser} />
           <p id="user-email">{authContext.email}</p>
-          <a id="signout-link"
-            className="nav-link"
-            alt="Sign Out"
-            onClick={() => toggleAuthModal('Sign Out')}
-            onKeyPress={() => toggleAuthModal('Sign Out')}
-            tabIndex={0}
-          >Sign out</a>
+
+          <form id="signout-link" className="nav-link" method='post' action={`${window.API_HOST}/accounts/logout/`} onSubmit={handleSubmit}>
+            <input type='hidden' name='csrfmiddlewaretoken' value={getCookie('csrftoken')} />
+            <button type='submit' autoFocus={true}>Sign out</button>
+          </form>
         </div>
 
         <div className="menu-items">
@@ -141,6 +148,11 @@ export default function UserNavigation(props) {
 
             <FontAwesomeIcon icon={faChevronRight} />
           </a>
+
+          <div className='release-tag'>
+            { window.DEPLOYMENT_TAG || '' }
+            { window.RELEASE ? ` (${window.RELEASE})` : '' }
+          </div>
         </div>
       </DropdownButton>
     );
@@ -182,14 +194,21 @@ export default function UserNavigation(props) {
   const getSigninBtn = () => {
     return (
       <a
-        className="btn btn-primary"
-        id="signin-btn"
-        alt="Sign in button"
-        onClick={() => {toggleAuthModal('Sign In')}}
-        onKeyPress={() => {toggleAuthModal('Sign In')}}
-        tabIndex={0}>
-
-        Sign in
+      className="btn btn-primary"
+      id="signin-btn"
+      alt="Sign in button"
+      onClick={() => {
+        toggleAuthModal('Sign in');
+      }}
+      onKeyDown={keyEvent => {
+        if (keyEvent.key === 'Enter' || keyEvent.key === 'NumpadEnter') {
+        keyEvent.preventDefault();
+        toggleAuthModal('Sign in');
+        }
+      }}
+      tabIndex={0}
+      >
+      Sign in
       </a>
     );
   }

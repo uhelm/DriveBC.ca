@@ -33,15 +33,16 @@ export default function AccountPage() {
 
   // Redux
   const dispatch = useDispatch();
-  const { selectedRoute } = useSelector(useCallback(memoize(state => ({
-    selectedRoute: state.routes.selectedRoute
+  const { selectedRoute, searchedRoutes } = useSelector(useCallback(memoize(state => ({
+    selectedRoute: state.routes.selectedRoute,
+    searchedRoutes: state.routes.searchedRoutes,
   }))));
 
   // Refs
   const showedModal = useRef(false);
 
   // States
-  const [verified, setVerified] = useState(params.get('verified'));
+  const [verified] = useState(params.get('verified'));
   const [showDeactivate, setShowDeactivate] = useState(false);
 
   // Effects
@@ -52,7 +53,7 @@ export default function AccountPage() {
 
     // Show login modal once if user is not logged in
     if (!authContext.username && !showedModal.current) {
-      toggleAuthModal("Sign In");
+      toggleAuthModal('Sign in');
       showedModal.current = true;
     }
   }, [authContext]);
@@ -73,7 +74,7 @@ export default function AccountPage() {
     if (response.status === 204) {
       // Successfully deleted the user, handle logout or redirect
       setAuthContext({ ...authContext, username: null });
-      logoutDispatch(dispatch, selectedRoute);
+      logoutDispatch(dispatch, selectedRoute, searchedRoutes);
       navigate('/account-deactivated');
     }
   };
@@ -119,7 +120,7 @@ export default function AccountPage() {
                   className='btn btn-outline-primary'
                   tabIndex={0}
                   onClick={() => navigate('/verify-email')}
-                  onKeyPress={() => navigate('/verify-email')}>
+                  onKeyDown={() => navigate('/verify-email')}>
 
                   <b>Verify email address</b>
                 </Button>
@@ -132,8 +133,8 @@ export default function AccountPage() {
           <Button
             variant="outline-primary" id="deactivate-btn" alt="Deactivate DriveBC account" tabIndex={0}
             onClick={() => setShowDeactivate(true)}
-            onKeyPress={(keyEvent) => {
-              if (keyEvent.charCode == 13 || keyEvent.charCode == 32) {
+            onKeyDown={(keyEvent) => {
+              if (['Enter', 'NumpadEnter', 'Space'].includes(keyEvent.key)) {
                 deactivateHandler();
               }
             }}>
@@ -147,7 +148,7 @@ export default function AccountPage() {
             <h3>Login required</h3>
 
             <p>
-              You must be <a href="#" onClick={() => toggleAuthModal("Sign In")}>logged in</a> to view this page.
+              You must be <a href="#" onClick={() => toggleAuthModal("Sign in")}>logged in</a> to view this page.
             </p>
           </div>
         }

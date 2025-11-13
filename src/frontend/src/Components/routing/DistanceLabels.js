@@ -6,6 +6,7 @@ import { useSelector } from "react-redux";
 import { memoize } from "proxy-memoize";
 
 // Internal imports
+import { compareRoutes } from "../data/routes";
 import { removeOverlays } from "../map/helpers";
 
 // External imports
@@ -16,12 +17,16 @@ import { destination, point, distance } from "@turf/turf";
 
 // Styling
 import './DistanceLabels.scss';
-import { routeStyles } from "../data/featureStyleDefinitions";
 
 export default function DistanceLabels(props) {
   /* initialization */
   // Props
-  const { mapLayers, mapRef, updateClickedFeature } = props;
+  const { updateRouteDisplay, mapRef, isCamDetail } = props;
+
+  // Map not loaded, do nothing
+  if (!mapRef || !mapRef.current) {
+    return;
+  }
 
   // Redux
   const {
@@ -38,31 +43,10 @@ export default function DistanceLabels(props) {
   /* useEffect hooks */
   useEffect(() => {
     addDistanceOverlay();
-    updateMapDisplay(selectedRoute);
+    updateRouteDisplay(selectedRoute);
   }, [selectedRoute]);
 
   /* Rendering */
-  const updateMapDisplay = (route, clicked=false) => {
-    if (!route || !mapLayers.current.routeLayer) {
-      return;
-    }
-
-    const routeFeatures = mapLayers.current.routeLayer.getSource().getFeatures();
-    for (const feature of routeFeatures) {
-      if (feature.get('searchTimestamp') === route.searchTimestamp) {
-        feature.set('clicked', true);
-        feature.setStyle(routeStyles['active']);
-
-        if (clicked) {
-          updateClickedFeature(feature);
-        }
-      } else {
-        feature.set('clicked', false);
-        feature.setStyle(routeStyles['static']);
-      }
-    }
-  }
-
   // Threshold of 500 meters in distance by default
   const arePointsClose = (coords, threshold = 5000) => {
     if (!coords || coords.length < 2) {
@@ -76,29 +60,40 @@ export default function DistanceLabels(props) {
   const addDistanceOverlay = (closing=false) => {
     removeOverlays(mapRef);
 
-    const latlngs = searchedRoutes.map((route) => {
+    const routeData = isCamDetail ? [selectedRoute] : searchedRoutes;
+
+    const latlngs = routeData.map((route) => {
       return new LineString((Array.isArray(route.route) ? route.route : route.route.coordinates[0])).getCoordinateAt(0.5);
     });
     const isTooClose = arePointsClose(latlngs);
 
-    searchedRoutes.forEach((route, index) => {
+    routeData.forEach((route, index) => {
       const elem = document.createElement('div');
 
       elem.addEventListener('click', () => {
-        updateMapDisplay(route, true);
+        updateRouteDisplay(route);
       });
 
       const roundedDistance = Math.round(route.distance);
 
-      const showAsSelected = !closing && route.searchTimestamp === selectedRoute.searchTimestamp;
+      const showAsSelected = !closing && compareRoutes(route, selectedRoute);
       elem.className = showAsSelected ? 'distance-overlay selected' : 'distance-overlay';
-      elem.innerHTML = showAsSelected ? `
-        <span class="index-label">${index + 1}</span>
-        <span class="distance-text">${roundedDistance} km</span>
-      ` : `
-        <span class="index-label selected">${index + 1}</span>
-        <span class="distance-text">${roundedDistance} km</span>
-      `;
+      if (routeData.length === 1) {
+        elem.innerHTML = `<span class="distance-text">${roundedDistance} km</span>`;
+
+      } else if (showAsSelected) {
+        elem.innerHTML = `
+          <span class="index-label">${(index === 0) ? 'A' : 'B'}</span>
+          <span class="distance-text">${roundedDistance} km</span>
+        `;
+
+      } else {
+        // Inverted selected styling for index bubble
+        elem.innerHTML = `
+          <span class="index-label">${(index === 0) ? 'A' : 'B'}</span>
+          <span class="distance-text">${roundedDistance} km</span>
+        `;
+      }
 
       const routeLs = new LineString(Array.isArray(route.route) ? route.route : route.route.coordinates[0]);
       let midPointLatLng = routeLs.getCoordinateAt(0.5);

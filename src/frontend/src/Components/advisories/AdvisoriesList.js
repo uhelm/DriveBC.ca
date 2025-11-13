@@ -1,5 +1,5 @@
 // React
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext } from 'react';
 
 // Navigation
 import { useNavigate } from 'react-router-dom';
@@ -9,6 +9,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faChevronRight
 } from '@fortawesome/pro-solid-svg-icons';
+import Button from "react-bootstrap/Button";
+import Skeleton from 'react-loading-skeleton';
 
 // Internal imports
 import { CMSContext } from '../../App';
@@ -18,7 +20,6 @@ import trackEvent from '../shared/TrackEvent.js';
 
 // Styling
 import './AdvisoriesList.scss';
-import Skeleton from 'react-loading-skeleton';
 
 export default function AdvisoriesList(props) {
   /* Setup */
@@ -29,10 +30,11 @@ export default function AdvisoriesList(props) {
   const navigate = useNavigate();
 
   // Props
-  const { advisories, showDescription, showTimestamp, showPublished, showArrow, isAdvisoriesListPage, showLoader } = props;
+  const { advisories, showDescription, showTimestamp, showPublished, isAdvisoriesListPage, showLoader } = props;
 
   function handleClick(advisory, keyEvent) {
-    if (keyEvent && keyEvent.keyCode != 13 && keyEvent.keyCode != 32) {
+    // Ignore key presses that aren't enter or space
+    if (keyEvent && !(['Enter', 'NumpadEnter', 'Space'].includes(keyEvent.key))) {
       return;
     }
 
@@ -144,12 +146,10 @@ export default function AdvisoriesList(props) {
                     </div>
                   }
 
-                  {(showTimestamp && !showPublished) &&
-                    <div className="timestamp-container">
-                      {!cmsContext.readAdvisories.includes(advisory.id.toString() + '-' + advisory.live_revision.toString()) && <div className="unread-display"></div>}
-                      <FriendlyTime date={advisory.latest_revision_created_at} />
-                    </div>
-                  }
+                  <Button variant="light" className='view-details-btn'>
+                    View Details
+                    <FontAwesomeIcon icon={faChevronRight}/>
+                  </Button>
                 </div>
 
                 {showDescription &&
@@ -165,18 +165,12 @@ export default function AdvisoriesList(props) {
                 }
 
                 {showTimestamp &&
-                <div className="timestamp-container timestamp-container--mobile">
-                  <span className="advisory-li-state">{advisory.first_published_at != advisory.last_published_at ? "Updated" : "Published" }</span>
-                  <FriendlyTime date={advisory.latest_revision_created_at} />
-                </div>
+                  <div className="timestamp-container timestamp-container--mobile">
+                    <span className="advisory-li-state">{advisory.first_published_at != advisory.last_published_at ? "Updated" : "Published" }</span>
+                    <FriendlyTime date={advisory.latest_revision_created_at} />
+                  </div>
                 }
               </div>
-
-              {showArrow &&
-                <div className="advisory-li__arrow">
-                  <FontAwesomeIcon icon={faChevronRight} />
-                </div>
-              }
             </div>
           );
         }

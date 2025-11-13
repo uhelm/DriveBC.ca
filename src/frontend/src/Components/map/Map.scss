@@ -3,7 +3,6 @@
 
 // Z-index
 .ol-overlaycontainer-stopevent {
-
   .ol-overlay-container {
     z-index: 10;
   }
@@ -13,29 +12,142 @@
   }
 }
 
+.btn.back-to-routes, .btn.back-to-details {
+  position: absolute;
+  z-index: 1;
+  top: 1rem;
+  left: 1rem;
+  background-color: white;
+  color: $Type-Link;
+  font-size: 0.875rem;
+  font-weight: 700;
+  border-radius: 4px;
+  border: 1px solid $Type-Link;
+
+  &:hover {
+    background: $Type-Link;
+    color: $White;
+  }
+
+  svg {
+    margin-right: 8px;
+  }
+
+  @media (min-width: 576px) {
+    top: 7rem;
+  }
+}
+
 .zoom-btn, .my-location {
   z-index: 5;
 }
 
 .map-wrap {
-  position: absolute;
-  top: 58px;
-  bottom: 0;
   width: 100%;
+  height: 100%;
 
-  @media (min-width: 992px) {
-    top: 58px;
+  @media (min-width: 576px) {
+    .error-notification {
+      top: 118px;
+    }
   }
 
   .map-container {
     display: flex;
     align-items: center;
     height: 100%;
+    position: relative;
 
     @media (max-width: 767px) {
       flex-direction: column;
     }
 
+    .side-panel {
+      height: 0%;
+      width: 100%;
+      background-color: white;
+      flex: 0;
+      order: 2;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      z-index: 4;
+
+      &:not(.has-route) {
+        transform: translateX(0%);
+        transform: translateY(100%);
+        transition: all 0.25s ease-in-out;
+
+        @media (min-width: 767px) {
+          transform: translateX(-100%);
+        }
+      }
+
+      @media (min-width: 767px) {
+        height: 100%;
+        order: 1;
+        width: 390px;
+      }
+
+      .panel-content {
+        width: 390px;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+
+        @media (max-width: 767px) {
+          width: 100%;
+        }
+      }
+
+      &.open {
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+        margin-top: auto;
+        margin-left: 1rem;
+        height: calc(100% - 112px);
+
+        &:not(.has-route) {
+          transform: translateX(0%);
+          transform: translateY(0%);
+          transition: all 0.25s ease-in-out;
+        }
+
+        &.has-route{
+          height: calc(100% - 160px);
+        }
+
+        @media (max-width: 767px) {
+          width: 100%;
+          max-height: 50%;
+
+          &.maximized {
+            min-height: 100%;
+            overflow: auto;
+
+            &.has-route {
+              min-height: calc(100% - 4rem);
+            }
+          }
+        }
+
+        .popup__content {
+          overflow-y: auto;
+        }
+
+        &:has(.selected) {
+          @media (max-width: 767px) {
+            min-height: fit-content;
+            max-height: 30vh;
+            margin-top: -8px;
+            border: 2px solid $Focus;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+          }
+        }
+      }
+    }
+
+    // Cam details page
     &.preview {
       flex-direction: column;
 
@@ -45,87 +157,32 @@
         overflow-y: auto;
 
         &.open {
-          min-width: 100%;
           min-height: 100%;
-        }
-      }
-    }
+          margin-right: auto;
 
-    .side-panel {
-      height: 100%;
-      background-color: white;
-      flex: 0;
-      min-width: 0px;
-      min-height: 0%;
-      transition: min-width 0.25s ease-in-out;
-      overflow-y: hidden;
-      overflow-x: hidden;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      z-index: 10;
-
-      @media (max-width: 767px) {
-        transition: min-height 0.25s ease-in-out;
-        order: 2;
-      }
-
-      &.open {
-        min-width: 390px;
-
-        .panel-content {
-          min-width: 390px;
-
-          .popup__content {
-            overflow-y: auto;
+          @media (min-width: 576px) {
+            min-width: 390px;
           }
         }
-
-        @media (max-width: 767px) {
-          min-width: 100%;
-          min-height: 50%;
-
-          .panel-content {
-            min-width: 100%;
-          }
-        }
-      }
-
-      &.maximized {
-        @media (max-width: 767px) {
-          min-height: 100%;
-          overflow: auto;
-        }
-      }
-
-      .panel-content {
-        flex: 1;
       }
     }
 
     .map {
       flex: 1;
       position: absolute;
-      @media (max-width: 767px) {
-        position: relative;
-      }
       width: 100%;
       height: 100%;
       overflow: hidden;
+
+      @media (max-width: 767px) {
+        position: relative;
+      }
 
       .map-left-container {
         position: absolute;
         width: 100%;
         margin-left: 0;
         transition: margin-left 0.25s ease-in-out;
-
-        &.margin-pushed{
-          margin-left: 390px;
-          @media (max-width: 767px) {
-            margin-left: 0px;
-          }
-        }
-
 
         @media (max-width: 768px) {
           &.error-showing {
@@ -138,12 +195,6 @@
         }
       }
 
-      .routing {
-        @media (orientation: landscape) and (max-width: 767px) {
-          width: fit-content;
-        }
-      }
-
       .ol-zoom .ol-zoom-out {
         margin-top: 200px;
       }
@@ -153,17 +204,21 @@
         border-radius: 4px;
         left: auto;
         right: 1rem;
-        bottom: 4rem;
+        bottom: 3.5rem;
         padding: 2px;
         position: absolute;
 
-        @media (min-width: 769px) {
-          right: 1rem;
+        @media (min-width: 576px) {
+          right: 4rem;
           bottom: 1rem;
         }
 
         @media (min-width: 992px) {
           right: 4rem;
+          bottom: 1rem;
+        }
+
+        &.route-details-open {
           bottom: 1rem;
         }
       }
@@ -179,6 +234,24 @@
         will-change: contents, width;
         transition: all 0.25s;
       }
+
+      &:has(.filters-menu.long) {
+        .tabs-pushed {
+          &.zoom-btn {
+            right: 330px;
+          }
+          &.ol-scale-line {
+            right: 378px;
+          }
+        }
+      }
+    }
+
+    .fixed-to-mobile-group {
+      position: absolute;
+      width: 100%;
+      bottom: 0;
+      z-index: 1;
     }
 
     .map-btn {
@@ -197,9 +270,17 @@
         color: $White;
       }
 
-      &.map-view, &.my-location,  &.cam-location {
+      &.map-view, &.cam-location {
         svg {
           margin-right: 8px;
+        }
+      }
+
+      &.my-location, &.open-filters {
+        svg {
+          @media (min-width: 576px) {
+            margin-right: 8px;
+          }
         }
       }
 
@@ -223,7 +304,7 @@
         transition: margin-left 0.25s ease-in-out;
 
         &.margin-pushed {
-          margin-left: 390px;
+          margin-left: 406px;
         }
 
         .spinner-border {
@@ -239,7 +320,12 @@
         right: 1rem;
         z-index: 5;
 
-        @media (max-width: 767px) {
+        @media (pointer: coarse) {
+          top: 1rem;
+          right: 1rem;
+        }
+
+        @media (max-width: 575px) {
           top: initial;
           bottom: 1rem;
         }
@@ -273,14 +359,18 @@
       border-radius: 6px;
       border: 1px solid $Type-Link;
       box-shadow: 0px 1.9368422031402588px 4.3578948974609375px 0px #00000021;
-      bottom: 1rem;
+      bottom: 6rem;
       right: 1rem;
       display: flex;
       flex-direction: column;
 
-      //Hide zoom slider on touch devices
-      @media (max-width: 992px) {
+      // Hide zoom buttons on touch devices
+      @media (pointer: coarse) {
         display: none;
+      }
+
+      @media (min-width: 576px) {
+        bottom: 1rem;
       }
 
       & > .btn {
@@ -329,4 +419,106 @@
       opacity: 0;
     }
   }
+}
+
+.mobile-mask {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  background: black;
+  opacity: 0.25;
+  z-index: 10;
+}
+
+
+// Drawer Styles - Mobile Only (768px and under)
+
+.drawer-overlay {
+  background-color: rgba(0, 0, 0, 0.4);
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  // Hide on desktop
+  @media (min-width: 769px) {
+    display: none;
+  }
+}
+
+.drawer-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: 100%;
+  
+  .drawer-drag-handle {
+    position: absolute;
+    width: 100%;
+    height: 44px;
+    cursor: grab;
+    z-index: 2;
+
+    &:after {
+      content: "";
+      position: absolute;
+      top: 0.25rem;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 32px;
+      height: 0.25rem;
+      background-color: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      z-index: 5;
+      cursor: grab;
+      transition: 0.1s ease-in-out all;
+    }
+
+    &:active::after {
+      cursor: grabbing;
+      background-color: rgba(0, 0, 0, 0.4);
+      width: 84px;
+      height: 0.35rem;
+      transition: 0.1s ease-in-out all;
+    }
+  }
+
+  & > div.panel-content {
+    overflow-y: auto;
+    height: 100%;
+    background-color: white;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+
+    .popup__content {
+      overflow-y: scroll;
+    }
+  }
+
+  .close-panel {
+    z-index: 3;
+  }
+
+  .side-panel {
+    width: 100%;
+    height: 100%;
+    border-radius: 12px 12px 0 0;
+  }
+
+  @media (min-width: 769px) {
+    display: none;
+  }
+}
+
+
+.drawer-content, .panel-content {
+  &:focus, &:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }    
+}
+
+.panel-content {
+  height: 100%;
 }

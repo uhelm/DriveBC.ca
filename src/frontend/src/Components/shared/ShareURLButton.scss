@@ -2,17 +2,15 @@
 
 .share-url {
   .copy-btn {
-    padding: .4rem .75rem;
     border-radius: 4px;
-    background: #EDEBE9;
     border: none;
     color: $Type-Primary;
     transition: 0.3s;
-    font-size: 0.875rem;
-
-    &:hover {
-      background: #F2F2F2;
-    }
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: none;
+    white-space: nowrap;
+    padding: 0;
 
     svg {
       margin-right: 0.4rem;
@@ -23,72 +21,62 @@
 .popup {
   &--camera {
     .copy-btn {
-      background: darken($Surface-camera, 8%);
-
-      &:hover {
-        background: darken($Surface-camera, 15%);
-      }
+      color: $Blue90;
     }
   }
   &--event {
-    &.major, &.closures {
-      .copy-btn {
-        background: darken($Surface-major, 8%);
-
-        &:hover {
-          background: darken($Surface-major, 15%);
+    &:not(.roadConditions) {
+      &.major, &.closures, &.closure {
+        .copy-btn {
+          color: $Error;
         }
       }
-
     }
     &.minor {
       .copy-btn {
-        background: darken($Surface-minor, 8%);
-
-        &:hover {
-          background: darken($Surface-minor, 15%);
-        }
+        color: $Gold110;
       }
-
     }
     &.chainUps {
       .copy-btn {
-        background: darken($Gold40, 8%);
-
-        &:hover {
-          background: darken($Gold40, 15%);
-        }
+        color: $Type-Primary;
       }
 
     }
   }
   &--ferry {
     .copy-btn {
-      background: darken($Surface-ferry, 8%);
-
-      &:hover {
-        background: darken($Surface-ferry, 15%);
-      }
+      color: $Green;
     }
 
   }
   &--weather {
     .copy-btn {
-      background: darken($Surface-weather, 8%);
-
-      &:hover {
-        background: darken($Surface-weather, 15%);
-      }
+      color: $Type-Primary;
     }
 
   }
   &--reststop {
     .copy-btn {
-      background: darken($Surface-reststop, 8%);
+      color: $Type-reststop;
+    }
 
-      &:hover {
-        background: darken($Surface-reststop, 15%);
+    &.closed {
+      .copy-btn {
+        color: $Error;
       }
+    }
+
+  }
+  &--wildfire {
+    .copy-btn {
+      color: $Error;
+    }
+
+  }
+  &--advisories {
+    .copy-btn {
+      color: $Advisory-Text;
     }
 
   }

@@ -1,4 +1,5 @@
-/* eslint-disable no-unused-vars */
+/* eslint-disable no-unused-vars, no-prototype-builtins */
+
 // React
 import React, {
   useContext,
@@ -9,49 +10,58 @@ import React, {
 } from 'react';
 
 // Navigation
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 // Redux
 import * as slices from '../../slices';
-import { updateSearchLocationFromWithMyLocation, updateSelectedRoute } from "../../slices";
+import { updateSearchLocationFromWithMyLocation, updateSelectedRoute, updateShowRouteObjs } from "../../slices";
 import { memoize } from 'proxy-memoize';
 import { useSelector, useDispatch } from 'react-redux';
 
 // External imports
-import Button from 'react-bootstrap/Button';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import Spinner from 'react-bootstrap/Spinner';
 import {
+  faChevronUp,
+  faChevronDown,
   faPlus,
   faMinus,
   faUpRightAndDownLeftFromCenter,
   faLocationCrosshairs,
   faXmark,
+  faArrowLeft,
+  faMap
 } from '@fortawesome/pro-solid-svg-icons';
 import { useMediaQuery } from '@uidotdev/usehooks';
+import Button from 'react-bootstrap/Button';
+import cloneDeep from 'lodash/cloneDeep';
+import Spinner from 'react-bootstrap/Spinner';
+import { Drawer } from '@vladyoslav/drawer';
 
 // Internal imports
 import { addCameraGroups } from '../data/webcams.js';
+import { compareRoutes } from "../data/routes";
 import {
   blueLocationMarkup,
   redLocationToMarkup,
-  fitMap,
   onMoveEnd,
   setLocationPin,
   setZoomPan,
   toggleMyLocation,
   zoomIn,
-  zoomOut
+  zoomOut,
+  fitMap,
+  removeOverlays
 } from './helpers';
+import { layerNameMap, toggleableLayers } from "./enums";
 import { loadLayer, loadEventsLayers, updateEventsLayers, enableReferencedLayer } from './layers';
-import { MapContext } from '../../App.js';
-import { maximizePanel, renderPanel, togglePanel } from './panels';
+import { FeatureContext, MapContext } from '../../App.js';
+import { resizePanel, renderPanel, togglePanel } from './panels';
 import { pointerMoveHandler, resetHoveredStates } from './handlers/hover';
 import { pointerClickHandler, resetClickedStates } from './handlers/click';
-import AdvisoriesWidget from '../advisories/AdvisoriesWidget';
+import { updateOverlappingPositions } from "./layers/eventsLayer";
 import CurrentCameraIcon from '../cameras/CurrentCameraIcon';
 import DistanceLabels from "../routing/DistanceLabels";
-import Filters from '../shared/Filters.js';
+import FilterTabs from './filter/FilterTabs';
 import RouteSearch from '../routing/RouteSearch.js';
 import NetworkErrorPopup from './errors/NetworkError';
 import ServerErrorPopup from './errors/ServerError';
@@ -73,27 +83,30 @@ import View from 'ol/View';
 
 // Styling
 import './Map.scss';
-import { cameraStyles } from "../data/featureStyleDefinitions";
+import { cameraStyles, routeStyles } from "../data/featureStyleDefinitions";
 
 export default function DriveBCMap(props) {
   /* initialization */
+  // Misc
+  const smallScreen = useMediaQuery('only screen and (max-width: 575px)');
+  const largeScreen = useMediaQuery('only screen and (min-width : 768px)');
+
   // Props
   const {
-    mapProps: {referenceData, isCamDetail, mapViewRoute, loadCamDetails},
+    mapProps: {referenceData, rootCamera, isCamDetail, mapViewRoute, loadCamDetails},
     showNetworkError, showServerError, trackedEventsRef,
     loadingLayers, setLoadingLayers, getInitialLoadingLayers
   } = props;
 
   // Navigation
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   let mousePointXClicked = undefined;
 
   // Context
-  const { mapContext } = useContext(MapContext);
-
-  // Enable referenced layer
-  enableReferencedLayer(referenceData, mapContext);
+  const { mapContext, setMapContext } = useContext(MapContext);
+  const { featureContext, setFeatureContext } = useContext(FeatureContext);
 
   // Redux
   const dispatch = useDispatch();
@@ -107,9 +120,10 @@ export default function DriveBCMap(props) {
       hef: { list: hef, filteredList: filteredHef },
       restStops: { list: restStops, filteredList: filteredRestStops },
       borderCrossings: { list: borderCrossings, filteredList: filteredBorderCrossings },
+      wildfires: { list: wildfires, filteredList: filteredWildfires },
     },
-    advisories: { list: advisories },
-    routes: { searchLocationFrom, searchLocationTo, selectedRoute, searchedRoutes },
+    advisories: { list: advisories, filteredList: filteredAdvisories },
+    routes: { searchLocationFrom, searchLocationTo, selectedRoute, searchedRoutes, showRouteObjs },
     map: { zoom, pan }
 
   } = useSelector(
@@ -124,6 +138,7 @@ export default function DriveBCMap(props) {
           hef: state.feeds.hef,
           restStops: state.feeds.restStops,
           borderCrossings: state.feeds.borderCrossings,
+          wildfires: state.feeds.wildfires,
         },
         advisories: state.cms.advisories,
         routes: state.routes,
@@ -136,8 +151,6 @@ export default function DriveBCMap(props) {
   const mapLayers = useRef({}); window.mapLayers = mapLayers;
   const geolocation = useRef();
   const hoveredFeature = useRef();
-  const isInitialMountLocation = useRef();
-  const isInitialClickedFeature = useRef();
   const searchParamInitialized = useRef();
   const locationPinRef = useRef();
   const locationToPinRef = useRef();
@@ -148,8 +161,17 @@ export default function DriveBCMap(props) {
   const myLocationRef = useRef();
   const locationSet = useRef();
   const routingContainerRef = useRef();
+  const cameraLocationButtonRef = useRef();
+  const scaleLineRef = useRef();
+
+  // Initialization flags
+  const isInitialMountLocation = useRef();
+  const isInitialClickedFeature = useRef();
+  const referenceFeatureInitialized = useRef(false);
 
   // States
+  const [openTabs, setOpenTabs] = useState(largeScreen && !isCamDetail);
+  const [maximizedPanel, setMaximizedPanel] = useState(false);
   const [myLocationLoading, setMyLocationLoading] = useState(false);
   const [myLocation, setMyLocation] = useState();
   const [advisoriesInView, setAdvisoriesInView] = useState([]);
@@ -165,7 +187,6 @@ export default function DriveBCMap(props) {
     chainUps: null,
     advisories: null
   });
-
   const [showSpinner, setShowSpinner] = useState(false);
 
   // Workaround for OL handlers not being able to read states
@@ -189,21 +210,132 @@ export default function DriveBCMap(props) {
     updatePosition(feature);
   };
 
+  const handleSetShowRouteObjs = (value) => {
+    dispatch(updateShowRouteObjs(value));
+  };
+
+  /* Constants for conditional rendering */
+  // Disable cam panel in details page
+  const disablePanel = isCamDetail && clickedFeature && clickedFeature.get('type') === 'camera';
+  const openPanel =
+    (!!clickedFeature ||
+      (searchedRoutes && searchedRoutes.length && !isCamDetail)
+    ) && !disablePanel;
+
+  // Drawer state
+  const getSnapPoints = () => {
+    if (!isCamDetail && showRouteObjs && selectedRoute) {
+      return !smallScreen ? ['25%', '50%', '80%'] : ['25%', '50%', '90%'];
+    } else {
+      return !smallScreen ? ['25%', '50%', '80%'] : ['25%', '50%', '100%'];
+    }
+  };
+
+  // Use a ref to persist the snap point across renders
+  const snapPointRef = useRef('25%');
+  const [snap, setSnap] = useState('25%');
+
+  // Update both state and ref when snap changes
+  const handleSnapChange = useCallback((newSnap) => {
+    snapPointRef.current = newSnap;
+    setSnap(newSnap);
+  }, []);
+
+  const snapPoints = getSnapPoints();
+
+  // Update snap when route details are shown/hidden (only when snap points actually change)
+  const prevRouteDetailsActive = useRef(false);
+  const prevSnapPoints = useRef(snapPoints);
+  const routeDetailsActive = !isCamDetail && showRouteObjs && selectedRoute;
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (referenceFeature && isCamDetail) {
-        referenceFeature.set('clicked', true);
-        if (clickedFeature !== undefined) {
-          referenceFeature.setStyle(cameraStyles.active);
-          updateClickedFeature(referenceFeature);
-          clearInterval(interval);
-        }
+    // Only adjust snap if the available snap points have changed
+    const snapPointsChanged = JSON.stringify(prevSnapPoints.current) !== JSON.stringify(snapPoints);
+    
+    if (snapPointsChanged) {
+      // Check if current snap point is valid in new snap points array
+      if (!snapPoints.includes(snapPointRef.current)) {
+        // Current snap isn't valid, adjust to nearest valid snap
+        const currentSnapValue = parseInt(snapPointRef.current);
+        const closestSnap = snapPoints.reduce((prev, curr) => {
+          return Math.abs(parseInt(curr) - currentSnapValue) < Math.abs(parseInt(prev) - currentSnapValue) ? curr : prev;
+        });
+        handleSnapChange(closestSnap);
       }
-    }, 200);
+      
+      prevSnapPoints.current = snapPoints;
+    }
+    
+    prevRouteDetailsActive.current = routeDetailsActive;
+  }, [snapPoints, routeDetailsActive, handleSnapChange]);
 
-    return () => clearInterval(interval);
-  }, [referenceFeature]);
+  // When opening a new feature, maintain the last used snap point
+  useEffect(() => {
+    if (openPanel && !largeScreen) {
+      // Use the stored snap point reference
+      setSnap(snapPointRef.current);
+    } else if (!openPanel) {
+      // Reset to default when drawer is completely dismissed
+      snapPointRef.current = '25%';
+      setSnap('25%');
+    }
+  }, [openPanel, largeScreen]);
+
+  // Track drawer y-position to reposition buttons fixed to draggable mobile panel
+  const drawerRef = useRef();
+  const [drawerY, setDrawerY] = useState(0);
+  const drawerInitialOffset = useRef(null);
+
+  useEffect(() => {
+    let frame;
+    
+    const updatePosition = () => {
+      if (drawerRef.current) {
+        const transform = getComputedStyle(drawerRef.current).transform;
+        if (transform && transform !== 'none') {
+          const match = transform.match(/matrix.*\((.+)\)/);
+          if (match) {
+            const values = match[1].split(', ');
+            const translateY = parseFloat(values[5]);
+            
+            // Capture the initial offset on first read
+            if (drawerInitialOffset.current === null) {
+              drawerInitialOffset.current = translateY;
+            }
+            
+            // Calculate relative movement from initial position
+            const relativeY = translateY - drawerInitialOffset.current;
+            
+            // Add offset for navbar when route is selected
+            // -58px when route objects are shown, -37px when just route is selected
+            const routeDetailsOffset = selectedRoute ? (showRouteObjs ? -58 : 20) : 0;
+            setDrawerY(relativeY + routeDetailsOffset);
+          }
+        } else {
+          setDrawerY(0);
+        }
+      } else {
+        setDrawerY(0);
+        drawerInitialOffset.current = null; // Reset when drawer unmounts
+      }
+      frame = requestAnimationFrame(updatePosition);
+    };
+
+    frame = requestAnimationFrame(updatePosition);
+    return () => cancelAnimationFrame(frame);
+  }, [showRouteObjs, selectedRoute]);
+
+  // ScaleLine
+  const scaleLineControl = new ScaleLine({ units: 'metric' });
+  const updateScaleLineClass = (openTabs, showRouteObjs) => {
+    if (!scaleLineRef.current) {
+      scaleLineRef.current = scaleLineControl.element;
+    }
+
+    const el = scaleLineRef.current;
+    el.classList.toggle('tabs-pushed', !!openTabs);
+    el.classList.toggle('route-details-open', (showRouteObjs && !clickedFeature));
+  }
 
   useEffect(() => {
     if (!isInitialClickedFeature.current) {
@@ -211,11 +343,11 @@ export default function DriveBCMap(props) {
       return;
     }
 
-    const featureData = clickedFeature instanceof Feature ? clickedFeature.getProperties() : null;
+    const featureType = clickedFeature instanceof Feature ? clickedFeature.get('type') : null;
 
-    if (featureData && featureData.type === 'route' && featureData.searchTimestamp !== selectedRoute.searchTimestamp) {
+    if (featureType === 'route' && !compareRoutes(clickedFeature.get('route'), selectedRoute)) {
       for (const route of searchedRoutes) {
-        if (route.searchTimestamp === featureData.searchTimestamp) {
+        if (compareRoutes(route === clickedFeature.get('route'))) {
           dispatch(updateSelectedRoute(route));
         }
       }
@@ -224,7 +356,7 @@ export default function DriveBCMap(props) {
 
   const updatePosition = (feature) => {
     // Do not process empty features, routes and advisories
-    if (feature != null && !Array.isArray(feature) && feature.getProperties().type !== 'route') {
+    if (feature != null && !Array.isArray(feature) && feature.get('type') !== 'route'&& feature.get('type') !== 'advisory') {
       let geometry = feature.getGeometry();
 
       if (geometry.getType() !== 'Point') { // feature is a line or polygon
@@ -239,23 +371,9 @@ export default function DriveBCMap(props) {
 
   const [showLocationAccessError, setShowLocationAccessError] = useState(false);
 
-  // check if geolocation permission is granted
-  navigator.permissions
-  .query({ name: "geolocation" })
-  .then((permissionStatus) => {
-    permissionStatus.onchange = () => {
-      if(permissionStatus.state === 'denied') {
-        setShowLocationAccessError(true);
-      }
-      else {
-        setShowLocationAccessError(false);
-      }
-    };
-  });
-
   const loadMyLocation = () => {
     if (!locationSet.current) {
-      setMyLocationLoading(true)
+      setMyLocationLoading(true);
     } else {
       dispatch(updateSearchLocationFromWithMyLocation([locationSet.current]));
     }
@@ -263,7 +381,7 @@ export default function DriveBCMap(props) {
 
   useEffect(() => {
     if(myLocationLoading) {
-      toggleMyLocation(mapRef, mapView, setMyLocationLoading, setMyLocation);
+      toggleMyLocation(mapRef, mapView, setMyLocationLoading, setMyLocation, setShowLocationAccessError);
     }
   }, [myLocationLoading])
 
@@ -274,10 +392,46 @@ export default function DriveBCMap(props) {
     }
   }, [myLocation])
 
+  // DBC22-4575: re-implementing DBC22-3835
+  useEffect(() => {
+    if (!clickedFeature) return;
+
+    // Fetch layer status
+    const featureType = clickedFeature.get('type');
+    const layerName = featureType == 'event' ?
+      clickedFeature.get('display_category') :
+      layerNameMap[featureType];
+    const layerActive = mapContext.visible_layers[layerName];
+
+    // If layer is off, close panel
+    if (!layerActive) resetClickedStates(null, clickedFeatureRef, updateClickedFeature);
+
+  }, toggleableLayers.map(layer => mapContext.visible_layers[layer]));
+
   /* useEffect hooks */
+  /* Push ScaleLine to the left when tabs are open */
+  useEffect(() => {
+    updateScaleLineClass(openTabs, showRouteObjs);
+  }, [openTabs, showRouteObjs]);
+
   /* initialization for OpenLayers map */
   useEffect(() => {
     if (mapRef.current) return; // stops map from initializing more than once
+
+    // check if geolocation permission is granted
+    if (!isCamDetail && navigator.permissions) {  // only when permissions API is supported
+      navigator.permissions.query({ name: "geolocation" }).then((permissionStatus) => {
+        setShowLocationAccessError(permissionStatus.state === 'denied');
+      });
+    }
+
+    // Enable referenced layer
+    enableReferencedLayer(referenceData, mapContext);
+
+    // Enable highway cams layer if in cam detail
+    if (isCamDetail) {
+      mapContext.visible_layers['highwayCams'] = true;
+    }
 
     const tileSource = new VectorTileSource({
       format: new MVT(),
@@ -307,11 +461,20 @@ export default function DriveBCMap(props) {
     const extent = [-155.230138, 36.180153, -102.977437, 66.591323];
     const transformedExtent = transformExtent(extent, 'EPSG:4326', 'EPSG:3857');
 
+    // Initialize map view
+    // Center
+    const sharedPan = searchParams.get('pan');
+    const initialCenter = sharedPan ? sharedPan.split(",").map(Number) : pan;
+
+    // Zoom
+    const defaultZoom = isCamDetail ? 5 : zoom;
+    const sharedZoom = searchParams.get('zoom');
+    const initialZoom = sharedZoom ? sharedZoom : defaultZoom;
+
     mapView.current = new View({
       projection: 'EPSG:3857',
-      constrainResolution: true,
-      center: fromLonLat(pan),
-      zoom: (isCamDetail || (referenceData && referenceData.type)) ? 5 : zoom,
+      center: fromLonLat(initialCenter),
+      zoom: initialZoom,
       maxZoom: 15,
       minZoom: 5,
       extent: transformedExtent,
@@ -339,7 +502,6 @@ export default function DriveBCMap(props) {
           layers: glStyle.layers.filter((layer) => (
             layer.id.startsWith('TRANSPORTATION/DRA/Hwy Symbols') ||
             layer.id.startsWith('TRANSPORTATION/DRA/Road Names')
-
           )),
         };
 
@@ -354,7 +516,7 @@ export default function DriveBCMap(props) {
       layers: [vectorLayer, symbolLayer],
       view: mapView.current,
       moveTolerance: 7,
-      controls: [new ScaleLine({ units: 'metric' })],
+      controls: [scaleLineControl],
     });
 
     geolocation.current = new Geolocation({
@@ -365,6 +527,19 @@ export default function DriveBCMap(props) {
       if (smallScreen) {
         resetHoveredStates(null, hoveredFeature);
       }
+
+      const [lon, lat] = toLonLat(mapView.current.getCenter());
+
+      const params = new URLSearchParams(window.location.search);
+
+      // Zoom/resolution changed, update overlapping event positions
+      if (params.get('zoom') != mapView.current.getZoom()) {
+        updateOverlappingPositions(mapLayers, mapContext, mapView);
+      }
+
+      params.set("pan", lon + ',' + lat);
+      params.set("zoom", mapView.current.getZoom());
+      navigate(`${location.pathname}?${params.toString()}`, { replace: true });
 
       dispatch(
         slices.updateMapState({
@@ -385,7 +560,8 @@ export default function DriveBCMap(props) {
 
       pointerClickHandler(
         features, clickedFeatureRef, updateClickedFeature,
-        mapView, isCamDetail, loadCamDetails, updateReferenceFeature
+        mapView, isCamDetail, loadCamDetails, updateReferenceFeature,
+        updateRouteDisplay, mapContext
       );
     });
 
@@ -393,7 +569,7 @@ export default function DriveBCMap(props) {
     mapRef.current.on('pointermove', (e) => {
       pointerMoveHandler(e, mapRef, hoveredFeature);
     });
-  });
+  }, []);
 
   /* Map operations on location search */
   useEffect(() => {
@@ -422,11 +598,18 @@ export default function DriveBCMap(props) {
         searchLocationTo.length == 0
       ) {
         isInitialMountLocation.current = false;
-        setZoomPan(
-          mapView,
-          9,
-          fromLonLat(searchLocationFrom[0].geometry.coordinates),
-        );
+        if (mapContext.pendingStartPan) {
+          setZoomPan(
+            mapView,
+            null,
+            fromLonLat(searchLocationFrom[0].geometry.coordinates),
+          );
+
+          setMapContext({
+            ...mapContext,
+            pendingStartPan: false,
+          })
+        }
       }
 
     } else {
@@ -466,21 +649,38 @@ export default function DriveBCMap(props) {
 
   /* Triggering handlers based on navigation data */
   useEffect(() => {
-    if (referenceFeature) {
-      // Do not trigger, routes will be handled by fitmap
-      if (referenceFeature.get('type') !== 'route') {
-        setZoomPan(mapView, 9, referenceFeature.getGeometry().flatCoordinates);
-      }
-
+    if (referenceFeature && !referenceFeatureInitialized.current) {
       pointerClickHandler(
         [referenceFeature], clickedFeatureRef, updateClickedFeature,
-        mapView, isCamDetail, loadCamDetails, updateReferenceFeature
+        mapView, isCamDetail, loadCamDetails, updateReferenceFeature,
+        updateRouteDisplay, mapContext
       );
+
+      referenceFeatureInitialized.current = true;
     }
   }, [referenceFeature]);
 
   /* Loading map layers */
   // Route layer
+  const updateRouteDisplay = (route) => {
+    if (!route || !mapLayers.current.routeLayer) {
+      return;
+    }
+
+    const routeFeatures = mapLayers.current.routeLayer.getSource().getFeatures();
+    for (const feature of routeFeatures) {
+      if (compareRoutes(feature.get('route'), route)) {
+        feature.set('clicked', true);
+        feature.setStyle(routeStyles['active']);
+        dispatch(updateSelectedRoute(route));
+
+      } else {
+        feature.set('clicked', false);
+        feature.setStyle(routeStyles['static']);
+      }
+    }
+  }
+
   useEffect(() => {
     setLoadingLayers(getInitialLoadingLayers());
 
@@ -491,21 +691,20 @@ export default function DriveBCMap(props) {
       });
     });
 
-    // Remove layer if no route found
-    const routesData = searchedRoutes ? searchedRoutes : null;
+    // Use only selectedRoute in cam details page
+    const routesData = isCamDetail ? (selectedRoute ? [selectedRoute] : null) : searchedRoutes;
     loadLayer(
       mapLayers, mapRef, mapContext,
       'routeLayer', routesData, routesData, 6, selectedRoute, updateReferenceFeature
     );
 
-    if (routesData) {
-      // Fit map to route if route found and not saved/unsaved
-      if (!!routesData.length && (!routesData[0].id || searchParams.get('type') == 'route')) {
-        fitMap(routesData, mapView);
-      }
+    if (localStorage.getItem("pendingFit") === 'true') {
+      fitMap(searchedRoutes, mapView);
+    }
 
-    } else {
-      resetClickedStates(null, clickedFeatureRef, updateClickedFeature);
+    // Remove all overlays from previously searched routes
+    if (!searchedRoutes || !searchedRoutes.length) {
+      removeOverlays(mapRef);
     }
   }, [searchedRoutes]);
 
@@ -514,9 +713,9 @@ export default function DriveBCMap(props) {
     // Do nothing if list empty
     if (filteredCameras) {
       // Deep clone and add group reference to each cam
-      const clonedCameras = structuredClone(cameras);
+      const clonedCameras = typeof structuredClone === 'function' ? structuredClone(cameras) : cloneDeep(cameras);
       const groupedCameras = addCameraGroups(clonedCameras);
-      const clonedFilteredCameras = structuredClone(filteredCameras);
+      const clonedFilteredCameras = typeof structuredClone === 'function' ? structuredClone(filteredCameras) : cloneDeep(filteredCameras);
       const groupedFilteredCameras = addCameraGroups(clonedFilteredCameras);
 
       loadLayer(
@@ -530,17 +729,22 @@ export default function DriveBCMap(props) {
   // Events layer
   useEffect(() => {
     // Add layers if not loaded
-    if (events && mapLayers.current && Object.keys(mapLayers.current).length > 0 && !mapLayers.current['majorEvents']) {
+    if (events && mapLayers.current && !mapLayers.current['majorEvents']) {
       const eventFound = loadEventsLayers(events, mapContext, mapLayers, mapRef, referenceData, updateReferenceFeature, setLoadingLayers);
       if (referenceData?.type === 'event' && !eventFound) {
         setStaleLinkMessage(true);
+        searchParams.delete('type');
+        searchParams.delete('display_category');
+        searchParams.delete('id');
+        setSearchParams(searchParams, { replace: true });
       }
     }
 
     // Count filtered events to store in routeDetails
     if (filteredEvents) {
       // Toggle features visibility
-      updateEventsLayers(filteredEvents, mapLayers, setLoadingLayers, referenceData);
+      const featuresDict = updateEventsLayers(mapContext, filteredEvents, mapLayers, setLoadingLayers, referenceData, mapView);
+      setFeatureContext({...featureContext, events: featuresDict});
 
       const eventCounts = {
         closures: 0,
@@ -551,9 +755,15 @@ export default function DriveBCMap(props) {
       }
       filteredEvents.forEach(event => {
         const eventType = event.display_category;
-        if (eventType && Object.hasOwn(routeDetails, eventType)) {
-          eventCounts[eventType] += 1;
-          setRouteDetails({ ...routeDetails, ...eventCounts});
+        if (eventType) {
+          const hasOwn = Object.hasOwn ?
+            Object.hasOwn(routeDetails, eventType) :
+            routeDetails.hasOwnProperty(eventType);
+
+          if (hasOwn) {
+            eventCounts[eventType] += 1;
+            setRouteDetails({ ...routeDetails, ...eventCounts});
+          }
         }
       });
     }
@@ -562,51 +772,46 @@ export default function DriveBCMap(props) {
 
   // Ferries layer
   useEffect(() => {
-    if (!isCamDetail) {
-      loadLayer(
+    if (!isCamDetail && ferries && filteredFerries) {
+      const featuresDict = loadLayer(
         mapLayers, mapRef, mapContext,
         'inlandFerries', ferries, filteredFerries, 66,
         referenceData, updateReferenceFeature, setLoadingLayers
       );
+      setFeatureContext({...featureContext, ferries: featuresDict});
     }
+
     // Add ferry count to routeDetails
     if (Array.isArray(filteredFerries)) {
       setSelectedFerries(filteredFerries.length);
     }
-
   }, [filteredFerries]);
 
   // Current weathers layer
   useEffect(() => {
-    if (!isCamDetail) {
-      loadLayer(
-        mapLayers, mapRef, mapContext,
-        'weather', currentWeather, filteredCurrentWeathers, 68,
-        referenceData, updateReferenceFeature, setLoadingLayers
-      );
-    }
+    loadLayer(
+      mapLayers, mapRef, mapContext,
+      'weather', currentWeather, filteredCurrentWeathers, 68,
+      referenceData, updateReferenceFeature, setLoadingLayers
+    );
   }, [filteredCurrentWeathers]);
 
   // Regional weathers layer
   useEffect(() => {
-    if (!isCamDetail) {
-      loadLayer(
-        mapLayers, mapRef, mapContext,
-        'regional', regionalWeather, filteredRegionalWeathers, 69,
-        referenceData, updateReferenceFeature, setLoadingLayers
-      );
-    }
+    loadLayer(
+      mapLayers, mapRef, mapContext,
+      'regional', regionalWeather, filteredRegionalWeathers, 69,
+      referenceData, updateReferenceFeature, setLoadingLayers
+    );
   }, [filteredRegionalWeathers]);
 
   // High elevation forecasts layer
   useEffect(() => {
-    if (!isCamDetail) {
-      loadLayer(
-        mapLayers, mapRef, mapContext,
-        'hef', hef, filteredHef, 70,
-        referenceData, updateReferenceFeature, setLoadingLayers
-      );
-    }
+    loadLayer(
+      mapLayers, mapRef, mapContext,
+      'hef', hef, filteredHef, 70,
+      referenceData, updateReferenceFeature, setLoadingLayers
+    );
   }, [filteredHef]);
 
   // Rest stops layer
@@ -628,123 +833,262 @@ export default function DriveBCMap(props) {
 
   // Border crossings layer
   useEffect(() => {
+    loadLayer(
+      mapLayers, mapRef, mapContext,
+      'borderCrossings', borderCrossings, filteredBorderCrossings, 71,
+      referenceData, updateReferenceFeature, setLoadingLayers
+    );
+  }, [borderCrossings]);
+
+  // Wildfires layer
+  useEffect(() => {
     if (!isCamDetail) {
-      loadLayer(
+      const featuresDict = loadLayer(
         mapLayers, mapRef, mapContext,
-        'borderCrossings', borderCrossings, filteredBorderCrossings, 71,
+        'wildfires', wildfires, filteredWildfires, 72,
         referenceData, updateReferenceFeature, setLoadingLayers
       );
+
+      setFeatureContext({...featureContext, wildfires: featuresDict});
     }
-  }, [borderCrossings]);
+  }, [wildfires]);
 
   // Advisories layer
   useEffect(() => {
-    loadLayer(
+    const featuresDict = loadLayer(
       mapLayers, mapRef, mapContext,
-      'advisoriesLayer', advisories, advisories, 5
+      'advisoriesLayer', advisories, filteredAdvisories, 5,
+      referenceData, updateReferenceFeature, setLoadingLayers
     );
 
-    if (advisories) {
-      if (mapRef.current) {
-        // First filter
-        onMoveEnd(mapRef.current, advisories, setAdvisoriesInView);
-
-        // Set handler for filtering on map move
-        mapRef.current.on('moveend', (e) => onMoveEnd(e.map, advisories, setAdvisoriesInView));
-      }
-    }
+    setFeatureContext({...featureContext, advisories: featuresDict});
   }, [advisories]);
 
-  /* Constants for conditional rendering */
-  // Disable cam panel in details page
-  const disablePanel = isCamDetail && clickedFeature && clickedFeature.get('type') === 'camera';
-  const openPanel = !!clickedFeature && !disablePanel;
-  const smallScreen = useMediaQuery('only screen and (max-width: 767px)');
+  useEffect(() => {
+    const advisoriesData = (filteredAdvisories && filteredAdvisories.length) ? filteredAdvisories : [];
+
+    if (mapRef.current) {
+      // First filter
+      onMoveEnd(mapRef.current, advisoriesData, setAdvisoriesInView);
+      // Create a named function to use for both adding and removing
+      const handleMoveEnd = (e) => onMoveEnd(e.map, advisoriesData, setAdvisoriesInView);
+
+      // Set handler for filtering on map move
+      mapRef.current.on('moveend', handleMoveEnd);
+
+      // Return cleanup function that removes the listener
+      return () => {
+        if (mapRef.current) {
+          mapRef.current.un('moveend', handleMoveEnd);
+        }
+      };
+    }
+  }, [filteredAdvisories]);
 
   // Reset search params when panel is closed
   useEffect(() => {
     if (searchParamInitialized.current) {
-      if (!openPanel) {
-        setSearchParams(new URLSearchParams({}));
+      if (!clickedFeature) {
+        searchParams.delete('type');
+        searchParams.delete('display_category');
+        searchParams.delete('id');
+        setSearchParams(searchParams, { replace: true });
       }
 
     } else {
       searchParamInitialized.current = true;
     }
-  }, [openPanel]);
+
+    if (selectedRoute && clickedFeature && clickedFeature.get('type') !== 'route') {
+      dispatch(updateShowRouteObjs(true));
+    }
+  }, [clickedFeature]);
+
+  useEffect(() => {
+    if (!selectedRoute) {
+      dispatch(updateShowRouteObjs(false));
+    }
+
+    if (panel.current) {
+      void panel.current.offsetHeight; // force reflow to update panel height
+    }
+  }, [selectedRoute]);
 
   /* Rendering */
   return (
-    <div className={`map-container ${isCamDetail ? 'preview' : ''}`}>
-      <div
-        ref={panel}
-        className={`side-panel ${openPanel ? 'open' : ''}`}
-        onClick={() => maximizePanel(panel, clickedFeature)}
-        onTouchMove={() => maximizePanel(panel, clickedFeature)}
-        onKeyDown={keyEvent => {
-          if (keyEvent.keyCode == 13) {
-            maximizePanel(panel, clickedFeature);
-          }
-        }}>
+    <div className={`map-container ${isCamDetail ? 'preview' : ''}`} data-vladyoslav-drawer-wrapper="">
+      {smallScreen && openTabs &&
+        <div className='mobile-mask'></div>
+      }
 
-        <button
-          className="close-panel"
-          aria-label={`${openPanel ? 'close side panel' : ''}`}
-          aria-hidden={`${openPanel ? false : true}`}
-          tabIndex={`${openPanel ? 0 : -1}`}
-          onClick={() => {
-            togglePanel(panel, resetClickedStates, clickedFeatureRef, updateClickedFeature, [
-              myLocationRef, routingContainerRef
-            ]);
-          }}>
-          <FontAwesomeIcon icon={faXmark} />
-        </button>
+      {searchedRoutes &&
+        <DistanceLabels updateRouteDisplay={updateRouteDisplay} mapRef={mapRef} isCamDetail={isCamDetail} />
+      }
 
-        <div className="panel-content">
-          {openPanel && searchedRoutes &&
-            renderPanel(clickedFeature, null, {...routeDetails, ferries: selectedFerries}, smallScreen, mapView)
-          }
+      {!!openPanel && largeScreen &&
+        <div
+          ref={panel}
+          className={`side-panel ${openPanel ? 'open' : ''} ${selectedRoute ? 'has-route' : ''}`}>
 
-          {openPanel && searchedRoutes &&
-            <DistanceLabels mapLayers={mapLayers} mapRef={mapRef} updateClickedFeature={updateClickedFeature} />
+          {clickedFeature && !isCamDetail && smallScreen &&
+            <button
+              className={`resize-panel + ${selectedRoute ? '' : ' no-route'}`}
+              aria-label={`${(maximizedPanel ? 'minimize' : 'maximize') + ' side panel'}`}
+              tabIndex={0}
+              onClick={() => resizePanel(panel, clickedFeature, setMaximizedPanel)}
+              onTouchMove={() => resizePanel(panel, clickedFeature, setMaximizedPanel)}
+              onKeyDown={keyEvent => {
+                if (['Enter', 'NumpadEnter'].includes(keyEvent.key)) {
+                  resizePanel(panel, clickedFeature);
+                }
+              }}>
+              <FontAwesomeIcon icon={maximizedPanel ? faChevronDown : faChevronUp} />
+            </button>
           }
 
-          {openPanel && !searchedRoutes &&
-            renderPanel(
+          {clickedFeature && (!selectedRoute || isCamDetail) &&
+            <button
+              className="close-panel"
+              aria-label={`${openPanel ? 'close side panel' : ''}`}
+              aria-hidden={`${openPanel ? false : true}`}
+              tabIndex={`${openPanel ? 0 : -1}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePanel(panel, resetClickedStates, clickedFeatureRef, updateClickedFeature, [
+                  myLocationRef, routingContainerRef
+                ], searchedRoutes);
+                setMaximizedPanel(false);
+              }}>
+              <FontAwesomeIcon icon={faXmark} />
+            </button>
+          }
+
+          <div className="panel-content">
+            {renderPanel(
               clickedFeature && !clickedFeature.get ? advisoriesInView : clickedFeature,
-              isCamDetail, null, smallScreen, mapView
-            )
-          }
+              isCamDetail,
+              smallScreen,
+              mapView,
+              clickedFeatureRef,
+              updateClickedFeature,
+              showRouteObjs,
+              handleSetShowRouteObjs
+            )}
+          </div>
         </div>
-      </div>
-
+      }
+      
       <div ref={mapElement} className="map">
-        {!isCamDetail && (
-          <div className={`map-left-container ${(showServerError || showNetworkError) ? 'error-showing' : ''} ${openPanel && 'margin-pushed'}`}>
+        {(!isCamDetail && selectedRoute && showRouteObjs && !clickedFeature) && (
+          <Button 
+            variant="primary-outline" 
+            className="btn-outline-primary back-to-routes" 
+            onClick={() => dispatch(updateShowRouteObjs(false))}>
+            <FontAwesomeIcon icon={faArrowLeft}/>
+            Routes
+          </Button>
+        )}
+
+        {(!smallScreen && !isCamDetail && selectedRoute && showRouteObjs && clickedFeature) && (
+          <Button
+            variant="primary-outline"
+            className="btn-outline-primary back-to-details"
+            aria-label={`back to route details`}
+            tabIndex={`${openPanel ? 0 : -1}`}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              togglePanel(panel, resetClickedStates, clickedFeatureRef, updateClickedFeature, [
+                myLocationRef, routingContainerRef
+              ], searchedRoutes);
+              setMaximizedPanel(false);
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              togglePanel(panel, resetClickedStates, clickedFeatureRef, updateClickedFeature, [
+                myLocationRef, routingContainerRef
+              ], searchedRoutes);
+              setMaximizedPanel(false);
+            }}>
+
+            <FontAwesomeIcon icon={faArrowLeft}/>
+            Route details
+          </Button>
+        )}
+
+        {!largeScreen && (
+          <Drawer.Root
+            open={openPanel && !largeScreen}
+            onOpenChange={(open) => {
+              if (!open) {
+                resetClickedStates(null, clickedFeatureRef, updateClickedFeature);
+              }
+            }}
+            snapPoints={snapPoints}
+            snap={snap}
+            setSnap={handleSnapChange}
+            modal={false}
+            dismissible={true}
+            shouldScaleBackground={false}
+            scaleFrom={'50%'}
+          >
+            <Drawer.Portal container={mapElement.current}>
+              <Drawer.Overlay className="drawer-overlay" />
+              <Drawer.Content className="drawer-content" ref={drawerRef}>
+                {clickedFeature && !isCamDetail &&
+                  <button
+                    className="close-panel"
+                    aria-label={`${openPanel ? 'close side panel' : ''}`}
+                    aria-hidden={`${openPanel ? false : true}`}
+                    tabIndex={`${openPanel ? 0 : -1}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      resetClickedStates(null, clickedFeatureRef, updateClickedFeature);
+                    }}>
+                    <FontAwesomeIcon icon={faXmark} />
+                  </button>
+                }
+                <div className="panel-content">
+                  <div className="drawer-drag-handle"></div>
+                {openPanel && renderPanel(
+                  clickedFeature && !clickedFeature.get ? advisoriesInView : clickedFeature,
+                  isCamDetail,
+                  smallScreen,
+                  mapView,
+                  clickedFeatureRef,
+                  updateClickedFeature,
+                  showRouteObjs,
+                  handleSetShowRouteObjs
+                )}
+                </div>
+              </Drawer.Content>
+            </Drawer.Portal>
+          </Drawer.Root>
+        )}
+
+        {!isCamDetail && !smallScreen && (
+
+          <div className={`map-left-container ${(showServerError || showNetworkError) ? 'error-showing' : ''} ${openPanel && 'margin-pushed'} ${isCamDetail && 'hidden'}`}>
             <RouteSearch
               ref={routingContainerRef}
               routeEdit={true}
               showSpinner={showSpinner}
               onShowSpinnerChange={setShowSpinner}
               myLocation={myLocation}
-              mapRef={mapRef} />
-
-            <AdvisoriesWidget
-              advisories={advisoriesInView}
-              updateClickedFeature={updateClickedFeature}
-              open={openPanel}
-              clickedFeature={clickedFeature}
-              clickedFeatureRef={clickedFeatureRef}
-              onMap={true}
-            />
+              mapRef={mapRef}
+              mapView={mapView}
+              resetClickedStates={() => resetClickedStates(null, clickedFeatureRef, updateClickedFeature)} />
           </div>
         )}
 
-        {(!isCamDetail && smallScreen) && (
-          <React.Fragment>
+        {(!isCamDetail && smallScreen && mapRef.current && (!showRouteObjs || clickedFeature)) && (
+          <div className="fixed-to-mobile-group"
+            style={{
+              transform: `translateY(${drawerY}px)`
+            }}
+          >
             <Button
               ref={myLocationRef}
-              className="map-btn my-location"
+              className="map-btn my-location fixed-to-mobile"
               variant="primary"
               onClick={loadMyLocation}
               aria-label="my location">
@@ -752,30 +1096,33 @@ export default function DriveBCMap(props) {
                 ? <Spinner animation="border" role="status" />
                 : <FontAwesomeIcon icon={faLocationCrosshairs} />
               }
-              My location
             </Button>
 
-            <Filters
+            <FilterTabs
               mapLayers={mapLayers}
               disableFeatures={isCamDetail}
               enableRoadConditions={true}
               enableChainUps={true}
               isCamDetail={isCamDetail}
               referenceData={referenceData}
-              loadingLayers={loadingLayers} />
-          </React.Fragment>
+              loadingLayers={loadingLayers}
+              open={openTabs}
+              setOpen={setOpenTabs} />
+          </div>
         )}
 
-        {(!isCamDetail && !smallScreen) && (
+        {(!isCamDetail && !smallScreen && mapRef.current) && (
           <React.Fragment>
-            <Filters
+            <FilterTabs
               mapLayers={mapLayers}
               disableFeatures={isCamDetail}
               enableRoadConditions={true}
               enableChainUps={true}
               isCamDetail={isCamDetail}
               referenceData={referenceData}
-              loadingLayers={loadingLayers} />
+              loadingLayers={loadingLayers}
+              open={openTabs}
+              setOpen={setOpenTabs} />
 
             <Button
               ref={myLocationRef}
@@ -789,7 +1136,7 @@ export default function DriveBCMap(props) {
           </React.Fragment>
         )}
 
-        <div className="map-btn zoom-btn">
+        <div className={"map-btn zoom-btn" + (openTabs ? ' tabs-pushed' : '')}>
           <Button
             className="zoom-in"
             variant="primary"
@@ -797,6 +1144,7 @@ export default function DriveBCMap(props) {
             onClick={() => zoomIn(mapView)}>
             <FontAwesomeIcon icon={faPlus} />
           </Button>
+
           <Button
             className="zoom-out"
             variant="primary"
@@ -804,19 +1152,18 @@ export default function DriveBCMap(props) {
             aria-label="zoom out">
             <FontAwesomeIcon icon={faMinus} />
           </Button>
+
           <div className="zoom-divider" />
         </div>
-
       </div>
 
       {isCamDetail && (
         <Button
+          ref={cameraLocationButtonRef}
           className="map-btn cam-location"
           variant="primary"
           onClick={() => {
-            if (referenceData) {
-              setZoomPan(mapView, 9, fromLonLat(referenceData.location.coordinates));
-            }
+            setZoomPan(mapView, 9, fromLonLat(rootCamera.location.coordinates));
 
             if (referenceFeature) {
               referenceFeature.set('clicked', true);
@@ -834,36 +1181,39 @@ export default function DriveBCMap(props) {
           className="map-btn map-view"
           variant="primary"
           onClick={mapViewRoute}>
-          <FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} />
-          Map view
+          <FontAwesomeIcon icon={faMap} />
+          View on map page
         </Button>
       )}
 
       {isCamDetail && (
-        <Filters
+        <FilterTabs
           mapLayers={mapLayers}
           disableFeatures={isCamDetail}
           enableRoadConditions={true}
           enableChainUps={true}
-          textOverride={'Layer filters'}
           isCamDetail={isCamDetail}
           referenceData={referenceData}
-          loadingLayers={loadingLayers} />
+          loadingLayers={loadingLayers}
+          open={openTabs}
+          setOpen={setOpenTabs} />
       )}
 
       {showLocationAccessError &&
-        <LocationAccessPopup />
+        <LocationAccessPopup marginPushed={!!openPanel} setShowLocationAccessError={setShowLocationAccessError} />
       }
 
       {showNetworkError &&
-        <NetworkErrorPopup />
+        <NetworkErrorPopup marginPushed={!!openPanel} />
       }
 
       {!showNetworkError && showServerError &&
-        <ServerErrorPopup />
+        <ServerErrorPopup marginPushed={!!openPanel} />
       }
 
-      { staleLinkMessage && <StaleLinkErrorPopup message={staleLinkMessage}/> }
+      {staleLinkMessage &&
+        <StaleLinkErrorPopup marginPushed={!!openPanel} message={staleLinkMessage}/>
+      }
     </div>
   );
 }

@@ -8,34 +8,29 @@
     padding-top: 24px;
   }
 
-  @media (min-width: 576px) {
+  @media (min-width: 992px) {
     flex-direction: row;
   }
 
   &__left {
-    margin-right: 28px;
+    margin-right: 24px;
     padding-bottom: 24px;
-    width: 360px;
-    min-width: 360px;
-    position: sticky;
-    top: 82px;
+    width: 100%;
     align-self: flex-start;
 
-    @media (min-width: 1200px) {
-      max-height: calc(100vh - 8vh);
-      overflow-y: auto;
-
-      &::-webkit-scrollbar {
-       display: none;
-      }
+    @media (min-width: 992px) {
+      position: sticky;
+      top: 1rem;
+      width: 310px;
+      min-width: 310px;
     }
 
     .routing {
-      margin-bottom: 20px;
       padding: 4px 10px 4px 4px;
 
       @media (min-width: 1200px) {
         width: 100%;
+        margin-bottom: 20px;
       }
 
       .routing-container {
@@ -59,7 +54,7 @@
       padding-right: 10px;
 
       .title {
-        background: $Gold30;
+        background: $Advisory-Bg;
         padding: 12px 16px;
         border-top-left-radius: 8px;
         border-top-right-radius: 8px;
@@ -68,7 +63,7 @@
           margin-bottom: 0;
           font-weight: 400;
           line-height: 2.125rem;
-          color: $Gold110;
+          color: $Advisory-Text;
         }
       }
 
@@ -77,6 +72,15 @@
         padding: 16px 16px 32px;
         border-bottom-left-radius: 8px;
         border-bottom-right-radius: 8px;
+
+        @media (min-width: 992px) {
+          max-height: calc(100vh - 278px);
+          overflow-y: auto;
+    
+          &::-webkit-scrollbar {
+           display: none;
+          }
+        }
 
         .advisories-list {
           list-style: none;
@@ -91,7 +95,7 @@
             display: flex;
             &:hover {
               background-color: $Grey10;
-              transition: 0.1s ease-in-out background-color;        
+              transition: 0.1s ease-in-out background-color;
             }
             &::marker {
               color: $Type-Link;
@@ -99,7 +103,7 @@
             .friendly-time-text {
               margin-left: 0;
             }
-            
+
             .advisory-li-teaser {
               max-width: 95%;
             }
@@ -118,6 +122,160 @@
   &__right {
     flex: 1 1 auto;
 
+    .sticky-sentinel {
+      height: 1px;
+      background: none;
+      margin: -1px;
+    }
+
+    .sticky-filters {
+      position: sticky;
+      z-index: 1;
+      top: 0;
+      padding: 20px 0;
+      background: $White;
+      will-change: transform;
+
+      &[stuck] {
+        @media (max-width: 575px) {
+          box-shadow: 0px 0.6px 1.8px 0px rgba(0, 0, 0, 0.10), 0px 3.2px 7.2px 0px rgba(0, 0, 0, 0.13);
+          margin: 0 -20px;
+          background-color: $Grey10;
+          padding: 8px 16px;
+        }
+      }
+
+      @media (max-width: 575px) {
+        padding: 0;
+        z-index: 20;
+
+        .controls-container {
+          .filters-text {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: $Grey80;
+          }
+
+          .filter-option-btn {
+            display: flex;
+            flex-direction: column;
+            height: 42px;
+            width: 42px;
+            border: none;
+            padding: 0;
+            align-items: center;
+            justify-content: center;
+
+            svg {
+              height: 16px;
+              width: 16px;
+              margin-top: 4px;
+              margin-right: 0;
+            }
+          }
+        }
+      }
+
+      .controls-group {
+        background-color: $Grey10;
+        padding: 4px 12px;
+        border-radius: 8px;
+
+        @media (min-width: 768px) {
+          padding: 8px;
+        }
+
+        .controls-container {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          border-radius: 8px;
+
+          @media (min-width: 768px) {
+            flex-direction: column;
+            align-items: flex-start;
+
+            .camSearch-container {
+              margin-bottom: 12px;
+            }
+          }
+
+          @media (min-width: 880px) {
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+
+            .camSearch-container {
+              margin-bottom: 0;
+            }
+          }
+
+          .route-display-container {
+            display: flex;
+            align-items: center;
+
+            @media (max-width: 767px) {
+              width: 100%;
+            }
+
+            .routing-container {
+              position: relative;
+              padding: 0;
+
+              @media (max-width: 767px) {
+                width: 100%;
+              }
+
+              .swap-button {
+                position: absolute;
+                top: 22px;
+                right: -10px;
+              }
+            }
+          }
+
+          .camSearch-container {
+            width: 100%;
+            margin-right: 20px;
+
+            .rbt {
+              .rbt-input {
+                height: 36px;
+                font-size: 0.875rem;
+              }
+
+              .clear-btn {
+                position: absolute;
+                top: 0;
+                right: 0;
+                background: none;
+                border: none;
+                font-size: 0.75rem;
+                padding: 0.55rem 0.75rem;
+              }
+            }
+
+            @media (min-width: 768px) {
+              max-width: 400px;
+            }
+
+            .rbt-menu {
+              display: none !important;
+            }
+          }
+        }
+      }
+
+      .mobile-btn-text {
+        font-size: 0.5rem;
+        margin-top: 4px;
+
+        @media (min-width: 576px) {
+          display: none;
+        }
+      }
+    }
+
     .controls-container {
       justify-content: space-between;
 
@@ -125,7 +283,7 @@
         display: flex;
         align-items: center;
         position: relative;
-  
+
         .btn {
           margin-bottom: 0;
         }
@@ -134,12 +292,12 @@
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-left: 16px;
-          
-          @media (max-width: 1199px) {
+          margin-left: 12px;
+
+          @media (max-width: 575px) {
             padding: 0;
-            height: 36px;
-            width: 36px;
+            height: 42px;
+            width: 42px;
             border: none;
           }
 
@@ -151,9 +309,16 @@
               color: $White;
             }
           }
+
+          .area-filter-btn__icon, .highway-filter-btn__icon {
+             @media (min-width: 576px) {
+              margin-left: 8px;
+              margin-right: 8px;
+            }
+          }
         }
 
-        .highway-filter-btn {
+        .highway-filter-btn, .area-filter-btn {
 
           &__icon {
             @media (min-width: 1200px) {
@@ -165,6 +330,7 @@
           .btn-text {
             font-size: 0.875rem;
             margin-bottom: 0;
+            white-space: nowrap;
           }
 
           .dropdown-icon {
@@ -228,12 +394,12 @@
       height: 0;
       overflow: hidden;
       transition: height 0.2s ease-in-out;
-      margin-bottom: 16px;
 
       &.open {
         height: 36px;
         overflow: auto;
         transition: height 0.2s ease-in-out;
+        margin-top: 8px;
       }
 
       .rbt {
@@ -243,6 +409,10 @@
         .rbt-input {
           height: 36px;
         }
+
+        .rbt-menu {
+          display: none !important;
+        }
       }
 
       .close-camera-search-btn {
@@ -251,6 +421,9 @@
         border: none;
         margin: 2px;
         padding: 4px 10px;
+        position: absolute;
+        top: 0;
+        right: 0;
       }
     }
   }

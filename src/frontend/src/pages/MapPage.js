@@ -1,16 +1,28 @@
 // React
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 // Redux
 import { useDispatch } from "react-redux";
-import { updateRouteDistance, updateSearchLocationFrom, updateSearchLocationTo } from "../slices";
+import {
+  clearSearchedRoutes,
+  clearSelectedRoute,
+  updateRouteDistance,
+  updateSearchLocationFrom,
+  updateSearchLocationTo
+} from "../slices";
+
+
+// Internal imports
+// import { HeaderHeightContext } from '../App.js';
+import EmergencyAlert from "../Components/shared/EmergencyAlert.js";
 
 // External Imports
 import { DndProvider } from 'react-dnd-multi-backend';
 import { HTML5toTouch } from 'rdndmb-html5-to-touch';
+import { useMediaQuery } from '@uidotdev/usehooks';
 
-// Internal imports
+import { shortenToOneDecimal } from "../Components/data/routes";
 import MapWrapper from '../Components/map/MapWrapper.js';
 
 // Styling
@@ -26,14 +38,20 @@ export default function MapPage() {
 
   document.title = 'DriveBC';
 
-  const referenceData = {
-    type: searchParams.get('type'),
-    id: searchParams.get('id'),
-    display_category: searchParams.get('display_category'),
-    searchTimestamp: searchParams.get('searchTimestamp'),
-  };
+  const getReferenceParams = () => {
+    return {
+      type: searchParams.get('type'),
+      id: searchParams.get('id'),
+      display_category: searchParams.get('display_category'),
+    };
+  }
+  const [referenceData, setReferenceData] = useState(null);
 
   // Effects
+  useEffect(() => {
+    setReferenceData(getReferenceParams());
+  }, [searchParams]);
+
   useEffect(() => {
     populateRoutesFromNotification();
   }, []);
@@ -50,7 +68,9 @@ export default function MapPage() {
     }
 
     if (routeData.route_distance) {
-      dispatch(updateRouteDistance(routeData.route_distance));
+      dispatch(clearSearchedRoutes());
+      dispatch(clearSelectedRoute());
+      dispatch(updateRouteDistance(shortenToOneDecimal(parseFloat(routeData.route_distance))));
 
       // Start point
       const route_start_coords = [
@@ -86,12 +106,21 @@ export default function MapPage() {
     }
   }
 
+  // const { headerHeightContext } = useContext(HeaderHeightContext);
+
+  const smallScreen = useMediaQuery('only screen and (max-width: 575px)');
+
   /* Rendering */
   // Main component
   return (
     <DndProvider options={HTML5toTouch}>
-      <div className="map-wrap">
-        <MapWrapper referenceData={referenceData} />
+      <div className="map-page map-wrap">
+        {/* Need this to show alert above Map; duplicates App level alert which is hidden by map */}
+        {/* <EmergencyAlert /> */}
+
+        {referenceData &&
+          <MapWrapper referenceData={referenceData} />
+        }
       </div>
     </DndProvider>
   );

@@ -7,6 +7,7 @@ from corsheaders.defaults import default_headers
 # Base dir and env
 BASE_DIR = Path(__file__).resolve().parents[4]
 SRC_DIR = Path(__file__).resolve().parents[3]
+APP_DIR = Path(__file__).resolve().parents[2]
 env = environ.Env()
 environ.Env.read_env(BASE_DIR / ".env", overwrite=True)
 
@@ -54,7 +55,7 @@ MIDDLEWARE = [
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [APP_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -88,8 +89,8 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 LOGIN_REDIRECT_URL = FRONTEND_BASE_URL
-LOGIN_URL = (FRONTEND_BASE_URL +
-             'accounts/oidc/idir/login/?process=login&next=%2Fdrivebc-admin%2F&auth_params=kc_idp_hint=azureidir')
+IDIR_LOGIN_PATH = 'accounts/oidc/idir/login/?process=login&next=%2Fdrivebc-admin%2F&auth_params=kc_idp_hint=azureidir'
+LOGIN_URL = (('http://localhost:8000/' if 'localhost' in FRONTEND_BASE_URL else FRONTEND_BASE_URL) + IDIR_LOGIN_PATH)
 
 # Language
 USE_I18N = False
@@ -135,6 +136,7 @@ THIRD_PARTY_APPS = [
     "wagtail",
     "modelcluster",
     "taggit",
+    'email_log',
 ]
 
 LOCAL_APPS = [
@@ -148,6 +150,7 @@ LOCAL_APPS = [
     "apps.rest",
     "apps.ferry",
     "apps.border",
+    "apps.wildfire",
 ]
 
 # apps with features overridden in local apps (e.g., admin templates) go here
@@ -194,17 +197,33 @@ DEFAULT_FROM_EMAIL = 'DoNotReply_DriveBC@gov.bc.ca'
 
 # Logging
 ROOT_LOG_LEVEL = env('ROOT_LOG_LEVEL', default='WARNING')
+HUEY_LOG_LEVEL = env('HUEY_LOG_LEVEL', default='INFO')
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
+            "formatter": 'standard',
+        },
+    },
+    'formatters': {
+        'standard': {
+            'class': 'logging.Formatter',
+            'format': '[%(asctime)s] %(levelname)s:%(name)s:%(threadName)s:%(message)s'
         },
     },
     "root": {
         "handlers": ["console"],
         "level": ROOT_LOG_LEVEL,
+    },
+    "loggers": {
+        "huey": {
+            "handlers": ["console"],
+            "level": HUEY_LOG_LEVEL,
+            "propagate": False
+        },
     },
 }
 

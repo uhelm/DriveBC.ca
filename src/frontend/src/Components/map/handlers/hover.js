@@ -1,5 +1,5 @@
 import {
-  cameraStyles,
+  coastalFerryStyles,
   ferryStyles,
   roadWeatherStyles,
   regionalStyles,
@@ -9,7 +9,11 @@ import {
   restStopTruckStyles,
   restStopTruckClosedStyles,
   routeStyles,
-  borderCrossingStyles
+  borderCrossingStyles,
+  regionalWarningStyles,
+  advisoryStyles,
+  wildfireCentroidStyles,
+  wildfireAreaStyles
 } from '../../data/featureStyleDefinitions.js';
 import {
   setEventStyle
@@ -24,7 +28,7 @@ export const resetHoveredStates = (targetFeature, hoveredFeatureRef) => {
     if (!hoveredFeature.getProperties().clicked) {
       switch (hoveredFeature.getProperties()['type']) {
         case 'camera':
-          hoveredFeature.setStyle(cameraStyles['static']);
+          hoveredFeature.setCameraStyle('static');
           break;
         case 'event': {
           // Reset feature if alt feature also isn't clicked
@@ -39,13 +43,20 @@ export const resetHoveredStates = (targetFeature, hoveredFeatureRef) => {
           break;
         }
         case 'ferry':
-          hoveredFeature.setStyle(ferryStyles['static']);
+          {
+            const styles = hoveredFeature.get('coastal') ? coastalFerryStyles : ferryStyles;
+            hoveredFeature.setStyle(styles['static']);
+          }
           break;
         case 'currentWeather':
           hoveredFeature.setStyle(roadWeatherStyles['static']);
           break;
         case 'regionalWeather':
-          hoveredFeature.setStyle(regionalStyles['static']);
+          hoveredFeature.setStyle(
+            hoveredFeature.get('warnings') ?
+            regionalWarningStyles['static'] :
+            regionalStyles['static']
+          );
           break;
         case 'hef':
           hoveredFeature.setStyle(hefStyles['static']);
@@ -88,6 +99,16 @@ export const resetHoveredStates = (targetFeature, hoveredFeatureRef) => {
         case 'borderCrossing':
           hoveredFeature.setStyle(borderCrossingStyles['static']);
           break;
+        case 'advisory':
+          hoveredFeature.setStyle(advisoryStyles['static']);
+          break;
+        case 'wildfire':
+          {
+            const isCentroid = hoveredFeature.getGeometry().getType() === 'Point';
+            hoveredFeature.setStyle((isCentroid ? wildfireCentroidStyles['static'] : wildfireAreaStyles['static']));
+            hoveredFeature.get('altFeature').setStyle((isCentroid ? wildfireAreaStyles['static'] : wildfireCentroidStyles['static']));
+          }
+          break;
       }
     }
 
@@ -108,8 +129,8 @@ export const pointerMoveHandler = (e, mapRef, hoveredFeature) => {
     // Set hover style if feature isn't clicked
     switch (targetFeature.getProperties()['type']) {
       case 'camera':
-        if (!targetFeature.getProperties().clicked) {
-          targetFeature.setStyle(cameraStyles['hover']);
+        if (!targetFeature.get('clicked')) {
+          targetFeature.setCameraStyle('hover');
         }
         return;
       case 'event':
@@ -127,8 +148,11 @@ export const pointerMoveHandler = (e, mapRef, hoveredFeature) => {
         }
         return;
       case 'ferry':
-        if (!targetFeature.getProperties().clicked) {
-          targetFeature.setStyle(ferryStyles['hover']);
+        {
+          const styles = targetFeature.get('coastal') ? coastalFerryStyles : ferryStyles;
+          if (!targetFeature.getProperties().clicked) {
+            targetFeature.setStyle(styles['hover']);
+          }
         }
         return;
       case 'currentWeather':
@@ -138,7 +162,8 @@ export const pointerMoveHandler = (e, mapRef, hoveredFeature) => {
         return;
       case 'regionalWeather':
         if (!targetFeature.getProperties().clicked) {
-          targetFeature.setStyle(regionalStyles['hover']);
+          const warnings = targetFeature.get('warnings');
+          targetFeature.setStyle(warnings ? regionalWarningStyles['hover'] : regionalStyles['hover']);
         }
         return;
       case 'hef':
@@ -180,6 +205,18 @@ export const pointerMoveHandler = (e, mapRef, hoveredFeature) => {
       case 'borderCrossing':
         if (!targetFeature.getProperties().clicked) {
           targetFeature.setStyle(borderCrossingStyles['hover']);
+        }
+        return;
+      case 'advisory':
+        if (!targetFeature.getProperties().clicked) {
+          targetFeature.setStyle(advisoryStyles['hover']);
+        }
+        return;
+      case 'wildfire':
+        if (!targetFeature.get('clicked')) {
+          const isCentroid = targetFeature.getGeometry().getType() === 'Point';
+          targetFeature.setStyle((isCentroid ? wildfireCentroidStyles['hover'] : wildfireAreaStyles['hover']));
+          targetFeature.get('altFeature').setStyle((isCentroid ? wildfireAreaStyles['hover'] : wildfireCentroidStyles['hover']));
         }
         return;
     }

@@ -12,6 +12,7 @@ import { memoize } from 'proxy-memoize';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faStar as faStarOutline, faXmark } from '@fortawesome/pro-regular-svg-icons';
 import Button from "react-bootstrap/Button";
+import Skeleton from 'react-loading-skeleton';
 
 // Internal imports
 import { AuthContext } from '../App';
@@ -46,7 +47,11 @@ export default function SavedRoutesPage() {
   // States
   const [routeLabel, setRouteLabel] = useState();
   const [routeFavCams, setRouteFavCams] = useState(false);
-  const [verified, setVerified] = useState(params.get('verified'));
+  const [verified] = useState(params.get('verified'));
+  const [onscreenCameras, setOnscreenCameras] = useState([]);
+
+  // Track which routes have loaded
+  const [routesLoaded, setRoutesLoaded] = useState(favRoutes ? favRoutes.map(r => false) : []);
 
   // Effects
   useEffect(() => {
@@ -56,7 +61,7 @@ export default function SavedRoutesPage() {
 
     // Show login modal once if user is not logged in
     if (!authContext.username && !showedModal.current) {
-      toggleAuthModal("Sign In");
+      toggleAuthModal("Sign in");
       showedModal.current = true;
     }
   }, [authContext]);
@@ -91,7 +96,7 @@ export default function SavedRoutesPage() {
             className='btn btn-outline-primary verify-link'
             tabIndex={0}
             onClick={() => navigate('/verify-email?my_routes=true')}
-            onKeyPress={() => navigate('/verify-email?my_routes=true')}>
+            onKeyDown={() => navigate('/verify-email?my_routes=true')}>
 
             <b>Verify email address</b>
           </Button>
@@ -106,7 +111,7 @@ export default function SavedRoutesPage() {
 
       {authContext.loginStateKnown && authContext.username &&
         <Container className="content-container">
-          {!(favRoutes && favRoutes.length) &&
+          {favRoutes && !favRoutes.length &&
             <div className="empty-routes-display">
               <h3>No saved routes</h3>
 
@@ -119,11 +124,19 @@ export default function SavedRoutesPage() {
           {!routeFavCams &&
             <div className={`route-list ${routeFavCams ? 'collapsed' : ''}`}>
               {favRoutes && favRoutes.length > 0 &&
-                favRoutes.map(route => (
+                favRoutes.map((route, index) => (index === 0 || routesLoaded[index-1]) ?
                   <div key={route.id} className='route-card'>
-                    <RouteDetails route={route} setRouteFavCams={setRouteFavCams} setRouteLabel={setRouteLabel} />
-                  </div>
-                ))
+                    <RouteDetails
+                      route={route}
+                      setRouteFavCams={setRouteFavCams}
+                      setRouteLabel={setRouteLabel}
+                      routesLoaded={routesLoaded}
+                      setRoutesLoaded={setRoutesLoaded}
+                      index={index} />
+                  </div> :
+
+                  <Skeleton key={route.id} height={450} />
+                )
               }
             </div>
           }
@@ -135,7 +148,10 @@ export default function SavedRoutesPage() {
                 <FontAwesomeIcon className="close-btn" icon={faXmark} onClick={() => setRouteFavCams(!routeFavCams)} />
               </div>
 
-              <CameraList cameras={routeFavCams} />
+              <CameraList
+                cameras={routeFavCams}
+                onscreenCameras={onscreenCameras}
+                setOnscreenCameras={setOnscreenCameras} />
             </div>
           }
         </Container>
@@ -147,7 +163,7 @@ export default function SavedRoutesPage() {
             <h3>Login required</h3>
 
             <p>
-              You must be <a href="#" onClick={() => toggleAuthModal("Sign In")}>logged in</a> to view this page.
+              You must be <a href="#" onClick={() => toggleAuthModal("Sign in")}>logged in</a> to view this page.
             </p>
           </div>
         </Container>

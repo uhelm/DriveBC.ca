@@ -13,6 +13,8 @@ urlpatterns = [
     path("ferries/", include("apps.ferry.urls")),
     path("reststops/", include("apps.rest.urls")),
     path("bordercrossings/", include("apps.border.urls")),
+    path("areas/", include("apps.shared.urls")),
+    path("wildfires/", include("apps.wildfire.urls")),
 
     # CMS
     path("wagtail/", wagtail_api_router.urls),
@@ -23,6 +25,7 @@ urlpatterns = [
 
     # Misc
     path("feedback/", views.FeedbackView.as_view(), name="feedback"),
+    path("survey/", views.SurveyView.as_view(), name="survey"),
     path("session", session.as_view()),
     path("test/", include("apps.shared.test_urls")),
 ]

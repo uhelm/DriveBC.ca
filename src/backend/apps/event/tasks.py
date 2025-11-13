@@ -12,12 +12,13 @@ from apps.event.enums import (
     EVENT_TYPE,
     EVENT_UPDATE_FIELDS,
 )
-from apps.event.helpers import get_site_link
+from apps.event.helpers import get_display_category, get_site_link
 from apps.event.models import Event
 from apps.event.serializers import EventInternalSerializer
 from apps.feed.client import FeedClient
 from apps.shared.enums import CacheKey
 from apps.shared.helpers import attach_default_email_images, attach_image_to_email
+from apps.shared.models import Area
 from django.conf import settings
 from django.contrib.gis.geos import LineString, Point
 from django.core.cache import cache
@@ -34,11 +35,15 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 def compare_data(current_field_data, new_field_data):
     if isinstance(current_field_data, Point):
-        new_point = Point(new_field_data.get('coordinates'))
+        new_point = Point(new_field_data.get('coordinates'))\
+            if not isinstance(new_field_data, Point) else new_field_data
+
         return current_field_data.equals(new_point)
 
     elif isinstance(current_field_data, LineString):
-        new_ls = LineString(new_field_data.get('coordinates', []))
+        new_ls = LineString(new_field_data.get('coordinates', []))\
+            if not isinstance(new_field_data, LineString) else new_field_data
+
         return current_field_data.equals(new_ls)
 
     else:
@@ -86,7 +91,9 @@ def populate_event_from_data(new_event_data):
 
         # Only update if existing data differs for at least one of the fields
         for field in EVENT_DIFF_FIELDS:
-            if not compare_data(getattr(event, field), new_event_data.get(field)):
+            old_data = getattr(event, field)
+            new_data = new_event_data.get(field)
+            if not compare_data(old_data, new_data):
                 # Found diff, update and stop loop
                 data_diff = build_data_diff(event, new_event_data)
                 Event.objects.filter(id=event_id).update(**data_diff)
@@ -95,13 +102,30 @@ def populate_event_from_data(new_event_data):
                 event.refresh_from_db()
                 event.save()
 
+                # Update intersecting areas only when location changes
+                if field == 'location':
+                    intersecting_areas = Area.objects.filter(geometry__intersects=event.location)
+                    event.area.set(intersecting_areas)
+
                 return True
+
+        # Update future events display category
+        # https://moti-imb.atlassian.net/browse/DBC22-2259
+        if event.display_category == EVENT_DISPLAY_CATEGORY.FUTURE_DELAYS:
+            new_display_category = get_display_category(event)
+            if new_display_category != EVENT_DISPLAY_CATEGORY.FUTURE_DELAYS:
+                # Update without triggering save
+                Event.objects.filter(id=event_id).update(display_category=new_display_category)
 
     except ObjectDoesNotExist:
         event = Event(id=event_id)
         event_serializer = EventInternalSerializer(event, data=new_event_data)
         event_serializer.is_valid(raise_exception=True)
-        event_serializer.save()
+        saved_event = event_serializer.save()
+
+        # Update intersecting areas on create
+        intersecting_areas = Area.objects.filter(geometry__intersects=event.location)
+        saved_event.area.set(intersecting_areas)
         return True
 
 
@@ -174,8 +198,13 @@ def populate_all_event_data():
             logger.warning(e)
 
     for chain_up in chain_ups:
+        # Active
         active_event_ids.append(chain_up.validated_data['id'])
-        chain_up.save()
+
+        # Updated
+        updated = populate_event_from_data(chain_up.validated_data)
+        if updated:
+            updated_event_ids.append(chain_up.validated_data['id'])
 
     # Purge events absent in the feed
     Event.objects.filter(status=EVENT_STATUS.ACTIVE)\
@@ -204,7 +233,8 @@ def get_image_type_file_name(event):
     icon_name_map = {
         EVENT_DISPLAY_CATEGORY.CLOSURE: 'closure.png',
         EVENT_DISPLAY_CATEGORY.ROAD_CONDITION: 'road.png',
-        EVENT_DISPLAY_CATEGORY.FUTURE_DELAYS: 'future.png'
+        EVENT_DISPLAY_CATEGORY.FUTURE_DELAYS: 'future.png',
+        EVENT_DISPLAY_CATEGORY.CHAIN_UP: 'chain-up.png'
     }
 
     if event.display_category == EVENT_DISPLAY_CATEGORY.MAJOR_DELAYS:
@@ -217,7 +247,7 @@ def get_image_type_file_name(event):
         return icon_name_map.get(event.display_category, 'incident-minor.png')
 
 
-def send_event_notifications(updated_event_ids, dt=None):
+def get_notification_routes(dt=None):
     current_dt = datetime.datetime.now(ZoneInfo('America/Vancouver')) if not dt else dt
 
     # Get the current day of the week and time
@@ -226,7 +256,7 @@ def send_event_notifications(updated_event_ids, dt=None):
     current_time = current_dt.time()
 
     # Get all saved routes that have notifications enabled
-    filtered_routes = SavedRoutes.objects.filter(user__verified=True, notification=True).filter(
+    filtered_routes = SavedRoutes.objects.filter(user__verified=True, user__consent=True, notification=True).filter(
         # Routes that are always active
         Q(notification_start_time=None) |
 
@@ -243,16 +273,21 @@ def send_event_notifications(updated_event_ids, dt=None):
           notification_start_time__lte=current_time, notification_end_time__gte=current_time)
     )
 
-    for saved_route in filtered_routes:
-        send_route_notifications(saved_route, updated_event_ids)
+    return filtered_routes
 
 
-def generate_settings_message(route):
-    isDst = datetime.datetime.now(ZoneInfo('America/Vancouver')).dst().total_seconds() > 0
+def send_event_notifications(updated_event_ids, dt=None):
+    for saved_route in get_notification_routes(dt):
+        send_route_event_notifications(saved_route, updated_event_ids)
+
+
+def generate_settings_message(route, test_time=None):
+    current_time = test_time or datetime.datetime.now(ZoneInfo('America/Vancouver'))
+    isDst = current_time.dst().total_seconds() > 0
     msg = 'Based on your settings, you are being notified for all new and updated '
 
     # Add event types
-    if route.notification_types and len(route.notification_types) == 4:
+    if route.notification_types and len(route.notification_types) == 5:
         msg += 'information '
 
     else:
@@ -273,8 +308,9 @@ def generate_settings_message(route):
 
     else:
         msg += (f'between {route.notification_start_time.strftime("%I:%M%p").lower()} '
-                f'and {route.notification_end_time.strftime("%I:%M%p").lower()} '
-                f'Pacific Standard Time (PST) ' if not isDst else 'Pacific Daylight Time (PDT) ')
+                f'and {route.notification_end_time.strftime("%I:%M%p").lower()} ')
+
+        msg += 'Pacific Standard Time (PST) ' if not isDst else 'Pacific Daylight Time (PDT) '
 
         # Specific date
         if route.notification_end_date:
@@ -295,7 +331,7 @@ def generate_settings_message(route):
     return msg
 
 
-def send_route_notifications(saved_route, updated_event_ids):
+def send_route_event_notifications(saved_route, updated_event_ids):
     # Apply a 150m buffer to the route geometry
     saved_route.route.transform(3857)
     buffered_route = saved_route.route.buffer(150)
@@ -313,11 +349,12 @@ def send_route_notifications(saved_route, updated_event_ids):
                 'event': event,
                 'route': saved_route,
                 'user': saved_route.user,
-                'from_email': settings.DRIVEBC_FEEDBACK_EMAIL_DEFAULT,
+                'from_email': settings.DRIVEBC_FROM_EMAIL_DEFAULT,
                 'display_category': event.display_category,
                 'display_category_title': event.display_category_title,
                 'site_link': get_site_link(event, saved_route),
                 'footer_message': generate_settings_message(saved_route),
+                'fe_base_url': settings.FRONTEND_BASE_URL,
             }
 
             text = render_to_string('email/event_updated.txt', context)
@@ -326,7 +363,7 @@ def send_route_notifications(saved_route, updated_event_ids):
             msg = EmailMultiAlternatives(
                 f'DriveBC route update: {saved_route.label}' if saved_route.label else 'DriveBC route update',
                 text,
-                settings.DRIVEBC_FEEDBACK_EMAIL_DEFAULT,
+                settings.DRIVEBC_FROM_EMAIL_DEFAULT,
                 [saved_route.user.email]
             )
 
@@ -336,3 +373,9 @@ def send_route_notifications(saved_route, updated_event_ids):
 
             msg.attach_alternative(html, 'text/html')
             msg.send()
+
+
+def update_event_area_relations():
+    for event in Event.objects.all():
+        intersecting_areas = Area.objects.filter(geometry__intersects=event.location)
+        event.area.set(intersecting_areas)

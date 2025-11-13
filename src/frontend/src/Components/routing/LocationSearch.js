@@ -1,36 +1,63 @@
 // React
-import React, { useState } from 'react';
+import React, {useContext, useRef, useState} from 'react';
+
+// Redux
 import { useDispatch } from 'react-redux';
 
-// react-bootstrap-typeahead
+// External imports
 import { AsyncTypeahead } from 'react-bootstrap-typeahead';
-import 'react-bootstrap-typeahead/css/Typeahead.css';
-
-// Components and functions
-import { getLocations } from '../data/locations.js';
-import trackEvent from '../shared/TrackEvent.js';
-// Styling
-import './LocationSearch.scss';
-
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faXmark } from '@fortawesome/pro-solid-svg-icons';
 
+// Internal imports
+import { MapContext } from "../../App";
+import { getLocations } from '../data/locations.js';
+import trackEvent from '../shared/TrackEvent.js';
+
+// Styling
+import './LocationSearch.scss';
+import 'react-bootstrap-typeahead/css/Typeahead.css';
+
 export default function LocationSearch(props) {
+  /* Setup */
+  // Props
+  const { placeholder, location, action, myLocation, selectByDefault } = props;
+  const isStartLocation = placeholder === 'Search starting location';
+
+  // Context
+  const { mapContext, setMapContext } = useContext(MapContext);
+
   // Redux
   const dispatch = useDispatch();
 
-  const { placeholder, location, action, myLocation } = props;
+  // Refs
+  const typeaheadRef = useRef(null);
 
+  // State
   const [minLength, setMinLength] = useState(3);
   const [cacheOptions, setCacheOptions] = useState(true);
   const [isSearching, setSearching] = useState(false);
   const [options, setLocationOptions] = useState([]);
 
+  // Helpers
   const setSelectedLocation = payload => {
     if (payload.length > 0) {
       window.document.activeElement.blur(); // De-focus textbox
     }
     dispatch(action(payload));
+
+    // Pending route fit after user input
+    const newContext = {
+      ...mapContext,
+      pendingRouteFit: true
+    };
+
+    // Pending pan to start location after user input
+    if (isStartLocation) {
+      newContext.pendingStartPan = true;
+    }
+
+    setMapContext(newContext);
   };
 
   const loadLocationOptions = locationInput => {
@@ -59,6 +86,8 @@ export default function LocationSearch(props) {
   // Rendering
   return (
     <AsyncTypeahead
+      ref={typeaheadRef}
+      autoFocus={selectByDefault}
       selected={location}
       filterBy={() => true}
       id="location-search-typeahead"
@@ -85,11 +114,13 @@ export default function LocationSearch(props) {
       inputProps={{
         'aria-label': 'input field for location ' + placeholder,
         ...props.inputProps,
-
       }}
-      selectHint={(shouldSelect, e) => {
-        // Select the hint if the user hits 'enter'
-        return e.keyCode === 13 || shouldSelect;
+      onKeyDown={(keyEvent) => {
+        if (['Enter', 'NumpadEnter'].includes(keyEvent.key) && options.length) {
+          setLocationOptions([]);
+          setSelectedLocation([options[0]]);
+          typeaheadRef.current.toggleMenu();
+        }
       }}
       renderMenuItemChildren={location => (
         <div>

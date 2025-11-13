@@ -14,8 +14,12 @@ self.onmessage = (event) => {
       case 'updateEvents':
         filteredData = filterByRoute(data, route, null, true);
         break;
+      case 'updateWildfires':
+      case 'setWildfireCount':
+        filteredData = filterByRoute(data, route, 10000, false);
+        break;
       default:
-        filteredData = filterByRoute(data, route, null, false);
+        filteredData = filterByRoute(data, route, 10, false);
         break;
     }
   }

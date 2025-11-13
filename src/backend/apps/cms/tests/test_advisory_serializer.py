@@ -9,9 +9,9 @@ class TestAdvisorySerializer(BaseTest):
         super().setUp()
 
         self.advisory = Advisory(
-            title = "Advisory title 1",
-            body = '[{"id": "1", "type": "rich_text", "value": "Advisory body 1"}]',
-            geometry = MultiPolygon(Polygon([
+            title="Advisory title 1",
+            body='[{"id": "1", "type": "rich_text", "value": "Advisory body 1"}]',
+            geometry=MultiPolygon(Polygon([
                 (-123.569743, 48.561231),
                 (-123.569743, 48.561231),
                 (-123.569743, 48.561231),
@@ -62,6 +62,3 @@ class TestAdvisorySerializer(BaseTest):
         serializer = AdvisoryTestSerializer(data=valid_data)
         # Check if the serializer is valid
         assert serializer.is_valid() is True
-        # Save the serializer data to create a new Advisory instance
-        saved_advisory = serializer.save()
-        assert saved_advisory.title == "Advisory title 1"

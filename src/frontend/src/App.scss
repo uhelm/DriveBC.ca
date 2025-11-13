@@ -3,10 +3,23 @@
 @import "styles/bootstrap-customizations";
 @import "styles/typography";
 
-//Global styling
-body {
-  margin-top: 58px;
+// Global styling
+* {
   touch-action: pan-x pan-y;
+}
+
+// Prevent refresh on swipe-down
+html,
+body {
+    overscroll-behavior-y: none;
+    overflow: hidden;
+}
+
+html,
+body,
+#root,
+.App {
+  height: 100%;
 }
 
 .divider {
@@ -27,36 +40,51 @@ body {
       margin-bottom: 1rem;
     }
 
-    .timestamp-container, .friendly-time-text{
-      color: $Type-Link;
-      font-size: 0.875rem;
-      font-weight: 700;
-    }
+    &__title {
+      .page-title {
+        font-size: 2.25rem;
+        margin-bottom: 1rem;
+      }
 
-    .timestamp-container {
-      display: flex;
+      .page-description {
+        margin-bottom: 1rem;
+      }
 
-      .friendly-time, .formatted-date {
-        margin-left: 0.5ch;
+      .timestamp-container, .friendly-time-text{
+        color: $Type-Link;
+        font-size: 0.875rem;
+        font-weight: 700;
+      }
+
+      .timestamp-container {
+        .friendly-time, .formatted-date {
+          margin-left: 0.5ch;
+        }
       }
     }
   }
 
   .cms-body {
     .responsive-object {
-      position: relative;
-    }
+      position: static;
+      padding-bottom: 2rem !important;
 
-    .responsive-object iframe,
-    .responsive-object img,
-    .responsive-object object,
-    .responsive-object embed {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      iframe, img, object, embed {
+        position: static;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+
+        @media screen and (min-width: 768px) {
+          width: 60%;
+        }
+      }
     }
 
     img {
@@ -120,35 +148,47 @@ body {
 
 // Common styling
 .camera-orientations {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  display: flex;
   align-items: center;
   background-color: $Blue10;
   border-radius: 4px;
   margin-top: 8px;
   padding: 4px 0px;
+  font-size: 14px;
+  font-weight: bold;
+  color: $BC-Blue;
 
-  .colocated-camera-icon {
-    margin: 0 auto;
+  .rotate-cam-container {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+
+    img {
+      margin: 0 8px;
+    }
+
+    span {
+      margin-right: 12px;
+    }
   }
 
   .btn.camera-direction-btn {
-    margin: 0 auto;
-    padding: 0px;
+    margin: 0;
+    padding: 0;
     border-radius: 8px;
     font-size: 0.875rem;
     font-weight: 700;
-    width: 6ch;
+    width: 5ch;
 
     &:hover {
-      background: $BtnHover-Primary;
+      background: $BC-Blue;
       color: white;
     }
 
     &:not(.current) {
       background: none;
       border-color: transparent;
-      color: $Type-Primary;
+      color: $BC-Blue;
       font-weight: 400;
 
       &:hover {
@@ -175,42 +215,27 @@ body {
     visibility: hidden !important;
 }
 
-// Icon for links opening in new tabs
-a[target="_blank"] {
-  margin-right: 18px;
-
-  &:not(.social-icon){
-    position: relative;
-
-    &:after {
-      position: absolute;
-      margin-top: 1px;
-      margin-left: 4px;
-      content: url("data:image/svg+xml,%3Csvg aria-hidden='true' focusable='false' role='img' xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' alt='external link'%3E%3Cpath fill='%23474543' d='M336 0c-8.8 0-16 7.2-16 16s7.2 16 16 16H457.4L212.7 276.7c-6.2 6.2-6.2 16.4 0 22.6s16.4 6.2 22.6 0L480 54.6V176c0 8.8 7.2 16 16 16s16-7.2 16-16V16c0-8.8-7.2-16-16-16H336zM64 32C28.7 32 0 60.7 0 96V448c0 35.3 28.7 64 64 64H416c35.3 0 64-28.7 64-64V304c0-8.8-7.2-16-16-16s-16 7.2-16 16V448c0 17.7-14.3 32-32 32H64c-17.7 0-32-14.3-32-32V96c0-17.7 14.3-32 32-32H208c8.8 0 16-7.2 16-16s-7.2-16-16-16H64z'/%3E%3C/svg%3E");
-      text-rendering: auto;
-      -webkit-font-smoothing: antialiased;
-      color: $Type-Secondary;
-      width: 0.625rem;
-    }
-  }
-}
-
 // Advisories button
 .btn.advisories-btn {
-  background: #FEF0D8;
+  background: $Advisory-Bg;
   width: fit-content;
   font-size: 0.875rem;
   font-weight: 700;
-  color: $Gold110;
+  color: $Advisory-Text;
   border-radius: 5px;
-  border: 1px solid $BC-Yellow;
+  border: 1px solid $Advisory-Text;
   margin-bottom: 0;
   display: flex;
   align-items: center;
 
   &:hover, &:active, &.active, &.open {
-    color: $Gold110;
-    background: darken(#FEF0D8, 10%);
+    color: $White;
+    background: $Advisory;
+
+    .advisories-count {
+      background: $White;
+      color: $Advisory;
+    }
   }
 
   &:focus, &.focus {
@@ -225,7 +250,7 @@ a[target="_blank"] {
     margin-left: 12px;
     font-size: 0.625rem;
     color: white;
-    background: $Error;
+    background: $Advisory-Text;
     width: 1rem;
     height: 1rem;
     border-radius: 0.5rem;
@@ -303,22 +328,32 @@ a[target="_blank"] {
       width: 100%;
     }
   }
-  div[class*='-page'] {
-    .container {
-      @media (min-width: 576px) {
-        max-width: unset;
-        padding: 32px 16px;
-      }
 
-      @media (min-width: 992px) {
-        padding: 44px 64px;
-        max-width: 1828px;
-      }
-    }
+  display: flex;
+  flex-direction: column;
 
-    &.cms-page {
+  > main {
+    height: 100%;
+    overflow-y: auto;
+
+    div[class*='-page'] {
+      // overflow-y: scroll;
       .container {
-        max-width: 980px;
+        @media (min-width: 576px) {
+          max-width: unset;
+          padding: 32px 16px;
+        }
+
+        @media (min-width: 992px) {
+          padding: 44px 64px;
+          max-width: 1828px;
+        }
+      }
+
+      &.cms-page {
+        .container {
+          max-width: 1260px;
+        }
       }
     }
   }
@@ -326,7 +361,7 @@ a[target="_blank"] {
 
 // advisories and search overlay
 .overlay {
-  position: absolute;
+  position: relative;
   bottom: 0;
   left: 0;
   width: 100%;
@@ -338,7 +373,7 @@ a[target="_blank"] {
   transition: all 0.2s ease-in-out;
 
   &.open {
-    min-height: 100%;
+    height: 100%;
   }
 
   @media (min-width: 768px) {
@@ -354,12 +389,6 @@ a[target="_blank"] {
   .overlay__header {
     font-size: 1.125rem;
     color: $BC-Blue;
-  }
-
-  &.advisories-overlay {
-    &.open {
-      padding: 3.625rem 0 1rem;
-    }
   }
 
   &.search-overlay {
@@ -378,16 +407,25 @@ a[target="_blank"] {
   }
 
   &.filters-overlay {
+    display: flex;
+    flex-direction: column;
+
+    .filters-component {
+      overflow-y: auto;
+    }
+
     &.open {
+      height: 100%;
       .overlay__header {
-        padding: 5rem 1rem 0;
+        // need to update if AB route alts are present
+        padding: 1rem 1rem 0;
       }
     }
   }
 
   .close-overlay {
     position: absolute;
-    top: 4.75rem;
+    top: 1rem;
     right: 1rem;
     padding: 0;
     min-width: 0;
@@ -437,4 +475,64 @@ button.text-only-btn {
 
 .link-div {
   cursor: pointer;
+}
+
+// error notification
+.error-notification {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  display: flex;
+  justify-content: space-around;
+  width: calc(100% - 2rem);
+  min-height: 84px;
+  padding: 8px 12px;
+  border-radius: 5px;
+  font-size: 0.875rem;
+  box-shadow: 0px 3.2px 7.2px 0px #00000021;
+  background: $Stale-Notification;
+  transition: margin-left 0.25s ease-in-out;
+  margin-left: 0;
+  z-index: 1000;
+
+  @media (min-width: 576px) {
+    width: 374px;
+  }
+
+  &.stale-link-error, &.server-error {
+    background: $Stale-Notification;
+    .error-icon {
+      background-color: $Type-Primary;
+    }
+  }
+
+  &.network-error, &.location-access-error {
+    background: $Error-Notification;
+    .error-icon {
+      background-color: $Gold110;
+    }
+  }
+
+  .error-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
+    color: white;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 6px;
+    margin-right: 12px;
+  }
+
+  .message-header {
+    display: flex;
+    justify-content: space-between;
+
+    .close-btn {
+      cursor: pointer;
+      margin: 0 4px;
+    }
+  }
 }

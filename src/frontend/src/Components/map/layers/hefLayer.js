@@ -27,8 +27,7 @@ export function getHefLayer(
       return;
     }
 
-    // Offset ~500m East to prevent overlapping with other features
-    const lng = forecast.location.coordinates[0] + 0.0044;
+    const lng = forecast.location.coordinates[0];
     const lat = forecast.location.coordinates[1];
     const olGeometry = new Point([lng, lat]);
     const olFeature = new ol.Feature({ geometry: olGeometry, type: 'hef' });
@@ -50,7 +49,7 @@ export function getHefLayer(
 
     if (referenceData?.type === 'hef') {
       // Update the reference feature if id is the reference
-      if (forecast.id == referenceData.id) {
+      if (forecast.id == referenceData.id) {  // Intentional loose equality for string IDs
         updateReferenceFeature(olFeatureForMap);
       }
     }
@@ -71,7 +70,9 @@ export function updateHefLayer(weathers, layer, setLoadingLayers) {
   }, {});
 
   for (const weatherFeature of layer.getSource().getFeatures()) {
-    weatherFeature.setStyle(weathersDict[weatherFeature.getId()] ? hefStyles['static'] : new Style(null));
+    if(!weatherFeature.getProperties()['clicked']){
+      weatherFeature.setStyle(weathersDict[weatherFeature.getId()] ? hefStyles['static'] : new Style(null));
+    }
   }
 
   setLoadingLayers(prevState => ({

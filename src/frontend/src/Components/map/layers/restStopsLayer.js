@@ -76,7 +76,7 @@ export function getRestStopsLayer(restStopsData, projectionCode, mapContext, ref
 
     if (referenceData?.type === 'restStop' || referenceData?.type === 'largeRestStop') {
       // Update the reference feature if id is the reference
-      if (restStop.id == referenceData.id) {
+      if (restStop.id == referenceData.id) {  // Intentional loose equality for string IDs
         updateReferenceFeature(olFeatureForMap);
       }
     }
@@ -97,7 +97,9 @@ export function updateRestStopsLayer(restStops, layer, setLoadingLayers) {
   }, {});
 
   for (const restStopFeature of layer.getSource().getFeatures()) {
-    restStopFeature.setStyle(restStopsDict[restStopFeature.getId()] ? getRestStopStyle(restStopFeature.getProperties()) : new Style(null));
+    if (!restStopFeature.getProperties()['clicked']) {
+      restStopFeature.setStyle(restStopsDict[restStopFeature.getId()] ? getRestStopStyle(restStopFeature.getProperties()) : new Style(null));
+    }
   }
 
   setLoadingLayers(prevState => ({

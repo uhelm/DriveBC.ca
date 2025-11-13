@@ -5,11 +5,18 @@ import { Fill, Icon, Stroke, Style } from 'ol/style.js';
 import cameraIconActive from '../../images/mapIcons/camera-active.png';
 import cameraIconHover from '../../images/mapIcons/camera-hover.png';
 import cameraIconStatic from '../../images/mapIcons/camera-static.png';
+import cameraIconHoverUnread from '../../images/mapIcons/camera-hover-unread.png';
+import cameraIconStaticUnread from '../../images/mapIcons/camera-static-unread.png';
 
 // Ferries
 import ferryIconActive from '../../images/mapIcons/ferry-active.png';
 import ferryIconHover from '../../images/mapIcons/ferry-hover.png';
 import ferryIconStatic from '../../images/mapIcons/ferry-static.png';
+
+// Coastal Ferries
+import coastalFerryIconActive from '../../images/mapIcons/coastal-ferry-active.png';
+import coastalFerryIconHover from '../../images/mapIcons/coastal-ferry-hover.png';
+import coastalFerryIconStatic from '../../images/mapIcons/coastal-ferry-static.png';
 
 // Road Weather
 import roadWeatherIconActive from '../../images/mapIcons/road-weather-active.png';
@@ -21,6 +28,11 @@ import regionalWeatherIconActive from '../../images/mapIcons/regional-weather-ac
 import regionalWeatherIconHover from '../../images/mapIcons/regional-weather-hover.png';
 import regionalWeatherIconStatic from '../../images/mapIcons/regional-weather-static.png';
 
+// Regional Weather with warning
+import regionalWeatherWarningIconActive from '../../images/mapIcons/regional-weather-advisory-active.png';
+import regionalWeatherWarningIconHover from '../../images/mapIcons/regional-weather-advisory-hover.png';
+import regionalWeatherWarningIconStatic from '../../images/mapIcons/regional-weather-advisory-static.png';
+
 // High Elevation Forecast
 import hefIconActive from '../../images/mapIcons/elevation-active.png';
 import hefIconHover from '../../images/mapIcons/elevation-hover.png';
@@ -30,6 +42,13 @@ import hefIconStatic from '../../images/mapIcons/elevation-static.png';
 import borderIconActive from '../../images/mapIcons/border-active.png';
 import borderIconHover from '../../images/mapIcons/border-hover.png';
 import borderIconStatic from '../../images/mapIcons/border-static.png';
+
+// Wildfires
+import wildfireIconActive from '../../images/mapIcons/wildfire/wildfires-active.png';
+import wildfireIconHover from '../../images/mapIcons/wildfire/wildfires-hover.png';
+import wildfireIconStatic from '../../images/mapIcons/wildfire/wildfires-static.png';
+import wildfireHoverUnread from '../../images/mapIcons/wildfire/wildfires-hover-unread.png';
+import wildfireStaticUnread from '../../images/mapIcons/wildfire/wildfires-static-unread.png';
 
 // Rest Stops
 import restStopIconActive from '../../images/mapIcons/restarea-open-active.png';
@@ -113,14 +132,34 @@ import genericDelaysStaticUnreadIcon from '../../images/mapIcons/incident-minor-
 
 // Map advisory styles
 export const advisoryStyles = {
-  polygon: new Style({
+  static: new Style({
     stroke: new Stroke({
-      color: 'rgb(88, 66, 21)',
+      color: 'rgba(242, 76, 39)',
       width: 2,
-      lineDash: [10,10]
+      lineDash: [5,5]
     }),
     fill: new Fill({
-      color: 'rgba(252, 186, 25, 0.25)',
+      color: 'rgba(252, 214, 192, 0.25)',
+    }),
+  }),
+  hover: new Style({
+    stroke: new Stroke({
+      color: 'rgba(248, 165, 147)',
+      width: 2,
+      lineDash: [5,5]
+    }),
+    fill: new Fill({
+      color: 'rgba(252, 214, 192, 0.65)',
+    }),
+  }),
+  active: new Style({
+    stroke: new Stroke({
+      color: 'rgba(242, 76, 39)',
+      width: 2,
+      lineDash: [5,5]
+    }),
+    fill: new Fill({
+      color: 'rgba(252, 214, 192, 0.65)',
     }),
   })
 };
@@ -137,6 +176,27 @@ export const cameraStyles = {
     image: new Icon({
       scale: 0.25,
       src: cameraIconHover,
+    }),
+  }),
+  active: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: cameraIconActive,
+    }),
+  }),
+};
+
+export const unreadCameraStyles = {
+  static: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: cameraIconStaticUnread,
+    }),
+  }),
+  hover: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: cameraIconHoverUnread,
     }),
   }),
   active: new Style({
@@ -165,6 +225,26 @@ export const ferryStyles = {
     image: new Icon({
       scale: 0.25,
       src: ferryIconActive,
+    }),
+  }),
+};
+export const coastalFerryStyles = {
+  static: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: coastalFerryIconStatic,
+    }),
+  }),
+  hover: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: coastalFerryIconHover,
+    }),
+  }),
+  active: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: coastalFerryIconActive,
     }),
   }),
 };
@@ -209,6 +289,27 @@ export const regionalStyles = {
     image: new Icon({
       scale: 0.25,
       src: regionalWeatherIconActive,
+    }),
+  }),
+};
+
+export const regionalWarningStyles = {
+  static: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: regionalWeatherWarningIconStatic,
+    }),
+  }),
+  hover: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: regionalWeatherWarningIconHover,
+    }),
+  }),
+  active: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: regionalWeatherWarningIconActive,
     }),
   }),
 };
@@ -1063,4 +1164,75 @@ export const borderCrossingStyles = {
       src: borderIconActive,
     }),
   }),
+};
+
+
+// Wildfire styles
+export const wildfireAreaStyles = {
+  static: new Style({
+    stroke: new Stroke({
+      color: 'rgba(242, 76, 39)',
+      width: 2,
+      lineDash: [5,5]
+    }),
+    fill: new Fill({
+      color: 'rgba(210, 55, 55, 0.20)',
+    }),
+  }),
+  hover: new Style({
+    stroke: new Stroke({
+      color: 'rgba(248, 165, 147)',
+      width: 2,
+      lineDash: [5,5]
+    }),
+    fill: new Fill({
+      color: 'rgba(210, 55, 55, 0.12)',
+    }),
+  }),
+  active: new Style({
+    stroke: new Stroke({
+      color: 'rgba(242, 76, 39)',
+      width: 2,
+      lineDash: [5,5]
+    }),
+    fill: new Fill({
+      color: 'rgba(210, 55, 55, 0.28)',
+    }),
+  })
+};
+
+export const wildfireCentroidStyles = {
+  static: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: wildfireIconStatic,
+    }),
+  }),
+  hover: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: wildfireIconHover,
+    }),
+  }),
+  active: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: wildfireIconActive,
+    }),
+  }),
+};
+
+export const wildfireUnreadStyles = {
+  static: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: wildfireStaticUnread,
+    }),
+  }),
+  hover: new Style({
+    image: new Icon({
+      scale: 0.25,
+      src: wildfireHoverUnread,
+    }),
+  })
 };

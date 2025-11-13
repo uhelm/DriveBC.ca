@@ -56,7 +56,7 @@ export default function FriendlyTime({ date, timezone, asDate=false, includeFull
     return (
       <React.Fragment>
         { includeFullIfHumanized &&
-          <p className="friendly-time-text formatted-date">{dateFormatted}</p>
+          <span className="friendly-time-text formatted-date">{dateFormatted}</span>
         }
 
         <div
@@ -67,8 +67,8 @@ export default function FriendlyTime({ date, timezone, asDate=false, includeFull
             setShowTooltip(!showTooltip);
           }}
           onKeyDown={(keyEvent) => {
-            if (keyEvent.keyCode == 13) {
-              event.stopPropagation();
+            if (['Enter', 'NumpadEnter'].includes(keyEvent.key)) {
+              keyEvent.stopPropagation();
               setShowTooltip(!showTooltip)
             }
           }}>
@@ -96,5 +96,5 @@ export default function FriendlyTime({ date, timezone, asDate=false, includeFull
     )
   }
 
-  return <p className="friendly-time-text formatted-date">{dateFormatted}</p>;
+  return <span className="friendly-time-text formatted-date">{dateFormatted}</span>;
 }

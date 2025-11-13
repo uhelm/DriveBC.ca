@@ -32,7 +32,6 @@ HUEY = {
         "flush_locks": True,
         "workers": 4,
         "worker_type": "thread",
-
     }
 }
 
@@ -50,6 +49,10 @@ if os.name == "nt":
     GDAL_LIBRARY_PATH = env("GDAL_LIBRARY_PATH")
 
 # Allauth
+KEYCLOAK_CLIENT_ID = env("BCEID_CLIENT_ID")
+KEYCLOAK_SECRET = env("BCEID_SECRET")
+KEYCLOAK_URL = env("BCEID_URL")
+
 ACCOUNT_ADAPTER = 'apps.authentication.adapters.AccountAdapter'
 
 # need our own adapter to override various redirect url methods following
@@ -59,29 +62,52 @@ SOCIALACCOUNT_PROVIDERS = {
     'openid_connect': {
         'APPS': [
             {
-                'provider_id': 'bceid',
-                'name': 'BCeID via Keycloak',
-                'client_id': env("BCEID_CLIENT_ID"),
-                'secret': env("BCEID_SECRET"),
+                'provider_id': 'idir',
+                'name': 'Azure IDIR via Keycloak',
+                'client_id': KEYCLOAK_CLIENT_ID,
+                'secret': KEYCLOAK_SECRET,
                 'settings': {
-                    'server_url': env("BCEID_URL"),
+                    'server_url': KEYCLOAK_URL,
+                    'auth_params': {
+                        'kc_idp_hint': 'azureidir',
+                    },
                 },
             },
             {
-                'provider_id': 'idir',
-                'name': 'Azure IDIR via Keycloak',
-                'client_id': env("BCEID_CLIENT_ID"),
-                'secret': env("BCEID_SECRET"),
+                'provider_id': 'bceid',
+                'name': 'BCeID via Keycloak',
+                'client_id': KEYCLOAK_CLIENT_ID,
+                'secret': KEYCLOAK_SECRET,
                 'settings': {
-                    'server_url': env("BCEID_URL"),
+                    'server_url': KEYCLOAK_URL,
+                    'auth_params': {
+                        'kc_idp_hint': 'bceidbasic',
+                    },
+                },
+            },
+            {
+                'provider_id': 'otp',
+                'name': 'One-time password via Keycloak',
+                'client_id': KEYCLOAK_CLIENT_ID,
+                'secret': KEYCLOAK_SECRET,
+                'settings': {
+                    'server_url': KEYCLOAK_URL,
+                    'auth_params': {
+                        'kc_idp_hint': 'otp',
+                    },
                 },
             },
         ],
-        'AUTH_PARAMS': {
-            'kc_idp_hint': 'bceidbasic',
-        },
+        'EMAIL_AUTHENTICATION_AUTO_CONNECT': True,
+        'EMAIL_AUTHENTICATION': True,
+        'STORE_TOKENS': True,
     },
 }
 
-SOCIALACCOUNT_EMAIL_VERIFICATION = 'none'
-SOCIALACCOUNT_LOGIN_ON_GET = True
+SOCIALACCOUNT_ADAPTER = 'apps.authentication.adapters.SocialAdapter'
+ACCOUNT_EMAIL_VERIFICATION = "none"
+SOCIALACCOUNT_LOGIN_ON_GET = False
+SOCIALACCOUNT_EMAIL_VERIFICATION = False
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_STORE_TOKENS = True

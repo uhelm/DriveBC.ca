@@ -98,9 +98,6 @@ EVENT_DIRECTION_DISPLAY = {
 
 EVENT_DIFF_FIELDS = [
     'last_updated',
-    'schedule',
-    'start',
-    'end'
 ]
 
 EVENT_UPDATE_FIELDS = [
@@ -127,6 +124,7 @@ EVENT_UPDATE_FIELDS = [
 
 
 class EVENT_DISPLAY_CATEGORY:
+    ADVISORY = 'advisories'
     CLOSURE = 'closures'
     MAJOR_DELAYS = 'majorEvents'
     MINOR_DELAYS = 'minorEvents'
@@ -136,6 +134,7 @@ class EVENT_DISPLAY_CATEGORY:
 
 
 EVENT_DISPLAY_CATEGORY_TITLE = {
+    EVENT_DISPLAY_CATEGORY.ADVISORY: "advisories",
     EVENT_DISPLAY_CATEGORY.CLOSURE: "closures",
     EVENT_DISPLAY_CATEGORY.MAJOR_DELAYS: "major delays",
     EVENT_DISPLAY_CATEGORY.MINOR_DELAYS: "minor delays",

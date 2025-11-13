@@ -18,14 +18,15 @@ import Skeleton from 'react-loading-skeleton';
 
 // Internal imports
 import { CMSContext } from '../App';
-import { getAdvisories } from '../Components/data/advisories.js';
-import { NetworkError, ServerError } from '../Components/data/helper';
+import { getAdvisories, markAdvisoriesAsRead } from '../Components/data/advisories.js';
+import { NetworkError, NotFoundError, ServerError } from '../Components/data/helper';
 import NetworkErrorPopup from '../Components//map/errors/NetworkError';
 import ServerErrorPopup from '../Components//map/errors/ServerError';
 import Footer from '../Footer';
 import FriendlyTime from '../Components/shared/FriendlyTime';
 import renderWagtailBody from '../Components/shared/renderWagtailBody.js';
 import overrides from '../Components/map/overrides.js';
+import ShareURLButton from '../Components/shared/ShareURLButton';
 
 // Styling
 import './AdvisoryDetailsPage.scss';
@@ -42,6 +43,14 @@ import MVT from 'ol/format/MVT.js';
 import VectorTileLayer from 'ol/layer/VectorTile.js';
 import VectorTileSource from 'ol/source/VectorTile.js';
 import View from 'ol/View.js';
+
+
+const NOT_FOUND_CONTENT = {
+  title: 'Advisory Not Found',
+  teaser: 'There is currently no published advisory at this URL',
+  body: '',
+};
+
 
 // OpenLayers functions
 function getMap(advisoryData) {
@@ -189,26 +198,26 @@ export default function AdvisoryDetailsPage() {
 
   // Data function and initialization
   const loadAdvisory = async () => {
-    const advisoryData = await getAdvisories(params.id).catch((error) => displayError(error));
+    const advisoryData = await getAdvisories(params.id).catch((error) => {
+      if (error instanceof NotFoundError) {
+        return NOT_FOUND_CONTENT;
+      } else {
+        displayError(error)
+      }
+    });
     setAdvisory(advisoryData);
 
-    if (!mapRef.current) {
-      mapRef.current = getMap(advisoryData);
+    if (advisoryData.id) {
+      if (!mapRef.current) {
+        mapRef.current = getMap(advisoryData);
+      }
+
+      fitMap(advisoryData);
+
+      document.title = `DriveBC - Advisories - ${advisoryData.title}`;
+
+      markAdvisoriesAsRead([advisoryData], cmsContext, setCMSContext);
     }
-
-    fitMap(advisoryData);
-
-    document.title = `DriveBC - Advisories - ${advisoryData.title}`;
-
-    // Combine and remove duplicates
-    const readAdvisories = Array.from(new Set([
-      ...cmsContext.readAdvisories,
-      advisoryData.id.toString() + '-' + advisoryData.live_revision.toString()
-    ]));
-    const updatedContext = {...cmsContext, readAdvisories: readAdvisories};
-
-    setCMSContext(updatedContext);
-    localStorage.setItem('cmsContext', JSON.stringify(updatedContext));
 
     setShowLoader(false);
   };
@@ -247,40 +256,50 @@ export default function AdvisoryDetailsPage() {
       }
 
         <div className="page-header">
-          <Container>
+          <Container id="back-container">
             <a
               className="back-link"
               onClick={returnHandler}
               onKeyDown={keyEvent => {
-                if (keyEvent.keyCode == 13) {
+                if (['Enter', 'NumpadEnter'].includes(keyEvent.key)) {
                   returnHandler();
                 }
-              }}>
+              }}
+              tabIndex={0}>
               <FontAwesomeIcon icon={faArrowLeft} />
               Back to last page
             </a>
-
-            {content && !showLoader &&
-              <div>
-                <h1 className="page-title">{content.title}</h1>
-                {content.teaser && (<p className="page-description body--large">{content.teaser}</p>)}
-
-                <div className="timestamp-container">
-                  <span className="advisory-li-state">{content.first_published_at != content.last_published_at ? "Updated" : "Published" }</span>
-                  <FriendlyTime date={content.latest_revision_created_at} />
-                </div>
-              </div>
-            }
-
-            {showLoader &&
-              <div>
-                <br/><Skeleton width={280} height={36}/>
-                <br/><Skeleton width={320} height={24}/>
-                <br/><Skeleton width={240} height={18}/>
-              </div>
-            }
           </Container>
         </div>
+
+        <Container className="page-header__title">
+          {content && !showLoader &&
+            <React.Fragment>
+              <h1 className="page-title">{content.title}</h1>
+              {content.teaser &&
+                <p className="page-description body--large">{content.teaser}</p>
+              }
+
+              {content.first_published_at &&
+                <div className="page-header__title__meta">
+                  <div className="timestamp-container">
+                    <span>{content.first_published_at != content.last_published_at ? "Updated" : "Published" }</span>
+                    <FriendlyTime date={content.latest_revision_created_at} />
+                  </div>
+                  <ShareURLButton />
+                </div>
+                }
+            </React.Fragment>
+          }
+
+          {showLoader &&
+            <div>
+              <br/><Skeleton width={280} height={36}/>
+              <br/><Skeleton width={320} height={24}/>
+              <br/><Skeleton width={240} height={18}/>
+            </div>
+          }
+        </Container>
 
       <Tabs
         id="advisory-details"

@@ -1,0 +1,97 @@
+@import "../../../styles/variables";
+
+.popup {
+  // Wildfire panel
+  &--wildfire {
+    .popup__title {
+      background-color: $Surface-major;
+
+      .name {
+        color: $Error;
+      }
+    }
+
+    .popup__content {
+      &__title {
+        color: $Error;
+        font-size: 24px;
+        line-height: 36px;
+      }
+
+      .wildfire-status {
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 0.875rem;
+
+        &--note {
+          background-color: $Advisory-Bg;
+          border: 1px solid $Advisory-Text;
+
+          .wildfire-status__title {
+            color: $Advisory-Text;
+          }
+        }
+
+        &--out-of-control {
+          background-color: $Surface-major;
+          border: 1px solid $Error;
+
+          .wildfire-status__title {
+            color: $Error;
+          }
+        }
+
+        &--being-held {
+          background-color: $Gold10;
+          border: 1px solid $Gold110;
+
+          .wildfire-status__title {
+            color: $Gold110;
+          }
+        }
+
+        &--under-control {
+          background-color: $Surface-green;
+          border: 1px solid $Green;
+
+          .wildfire-status__title {
+            color: $Green;
+          }
+        }
+
+        &__title {
+          font-weight: 700;
+          margin-bottom: 6px;
+        }
+      }
+
+      .data-icon {
+        width: 18px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      &__footer {
+        margin-top: 12px;
+        margin-bottom: 32px;
+        color: $Grey80;
+        font-size: 0.875rem;
+        text-align: center;
+
+        .url-btn {
+          background-color: $Grey10;
+          padding: 10px;
+          margin-bottom: 16px;
+          border-radius: 4px;
+
+          a {
+            font-weight: 700;
+            text-decoration: none;
+          }
+        }
+      }
+    }
+  }
+}

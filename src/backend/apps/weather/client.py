@@ -2,7 +2,9 @@ import logging
 from datetime import datetime, timezone
 
 import requests
+from apps.feed.client import FeedClient
 from django.conf import settings
+from django.core.cache import cache
 from rest_framework.response import Response
 
 logger = logging.getLogger(__name__)
@@ -20,44 +22,16 @@ class AreaCodeException(requests.RequestException):
         super().__init__(self.message)
 
 
-# TODO: make client manage token by expiry so that repeated calls to this
-# method either return a currently valid token or fetch a fresh one
-def get_access_token():
-    """
-    Return a bearer token
-
-    The URL and credentials aren't weather specific; they're for the shared
-    services API gateway.
-    """
-
-    token_url = settings.DRIVEBC_WEATHER_API_TOKEN_URL
-    client_id = settings.WEATHER_CLIENT_ID
-    client_secret = settings.WEATHER_CLIENT_SECRET
-
-    token_params = {
-        "grant_type": "client_credentials",
-        "client_id": client_id,
-        "client_secret": client_secret,
-    }
-
-    response = requests.post(token_url, data=token_params)
-    return response.json().get("access_token")
-
-
-def get_access_header():
-    try:
-        access_token = get_access_token()
-        return {"Authorization": f"Bearer {access_token}"}
-
-    except requests.RequestException as e:
-        raise AccessTokenException(str(e))
-
-
 # Regional Weather
-def get_area_weather(api_endpoint, area_code):
+def get_area_weather(api_endpoint, area_code, token=None):
     try:
-        response = requests.get(api_endpoint,
-                                headers=get_access_header())  # get a fresh token to avoid previous token expiring
+        access_token = token or cache.get('weather_access_token') or FeedClient().get_new_weather_access_token()
+
+        response = requests.get(
+            api_endpoint,
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+
         if response.status_code == 204:
             return  # empty response, continue with next entry
 
@@ -150,18 +124,22 @@ def get_area_weather(api_endpoint, area_code):
         raise AreaCodeException(str(e), area_code)
 
 
-def get_regional_weather_list():
+def get_regional_weather_list(token=None):
     """Get data feed for list of objects."""
+    access_token = token or cache.get('weather_access_token') or FeedClient().get_new_weather_access_token()
 
     try:
-        areas_list = requests.get(settings.DRIVEBC_WEATHER_AREAS_API_BASE_URL, headers=get_access_header()).json()
+        areas_list = requests.get(
+            settings.DRIVEBC_WEATHER_AREAS_API_BASE_URL,
+            headers={"Authorization": f"Bearer {access_token}"}
+        ).json()
 
         area_weathers = []
         for entry in areas_list:
             area_code = entry.get("AreaCode")
             api_endpoint = settings.DRIVEBC_WEATHER_API_BASE_URL + f"/{area_code}"
 
-            weather = get_area_weather(api_endpoint, area_code)
+            weather = get_area_weather(api_endpoint, area_code, token)
             if weather:
                 area_weathers.append(weather)
 

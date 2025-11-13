@@ -9,7 +9,6 @@ import {
   faBoxBallot,
   faBridge,
   faPlug,
-  faUtilityPole,
   faFlask
 } from '@fortawesome/pro-regular-svg-icons';
 
@@ -26,19 +25,19 @@ const ProblemsPage = () => {
     <div className="report-problem-page">
       <PageHeader title='Report a problem'>
       </PageHeader>
-      
+
       <Container>
         <div className="report-problem">
           <div className="section section--online">
             <div className="section__content">
-              <div className="content-card content-card--website disabled">
+              <Link to="/feedback" className="content-card content-card--feedback">
                 <div className="circle-icon">
                   <FontAwesomeIcon icon={faBoxBallot} />
                 </div>
                 <h3>Website problem or suggestion</h3>
                 <p>Report website feedback, suggestions, or bugs related to the new DriveBC website.</p>
-                <p className="bold attention">This feature is currently not available in Beta. Alternatively, you may use the Feedback link in the website header.</p>
-              </div>
+              </Link>
+
               <Link to="/highway-problem" className="content-card content-card--highway">
                 <div className="circle-icon">
                   <FontAwesomeIcon icon={faBridge} />
@@ -53,6 +52,7 @@ const ProblemsPage = () => {
                   <li>Animal carcasses</li>
                 </ul>
               </Link>
+
               <Link to="/road-electrical-problem" className="content-card content-card--electrical">
                 <div className="circle-icon">
                   <FontAwesomeIcon icon={faPlug} />
@@ -71,14 +71,6 @@ const ProblemsPage = () => {
 
           <div className="section section--phone">
             <div className="section__content">
-              <a href="tel:1-888-769-3766" className="content-card content-card--power">
-                <div className="circle-icon">
-                  <FontAwesomeIcon icon={faUtilityPole} />
-                </div>
-                <h4>Report downed power line</h4>
-                <p>BC Hydro</p>
-                <p className="tel-number bold">1-888-769-3766</p>
-              </a>
               <a href="tel:1-800-663-5555" className="content-card content-card--wildfire">
                 <div className="circle-icon">
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="38" viewBox="0 0 32 38" fill="none">
@@ -102,7 +94,7 @@ const ProblemsPage = () => {
         </div>
       </Container>
       <Footer />
-      
+
     </div>
   );
 };

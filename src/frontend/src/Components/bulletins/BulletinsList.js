@@ -1,5 +1,5 @@
 // React
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 
 // Navigation
 import { useNavigate } from 'react-router-dom';
@@ -39,7 +39,7 @@ export default function Bulletins(props) {
         return (
           <li className='bulletin-li' key={bulletin.id} onClick={() => handleClick(bulletin)}
             onKeyDown={(keyEvent) => {
-              if (keyEvent.keyCode == 13) {
+              if (['Enter', 'NumpadEnter'].includes(keyEvent.key)) {
                 handleClick(bulletin);
               }
             }}>

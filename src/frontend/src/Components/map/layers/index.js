@@ -1,4 +1,4 @@
-import { getAdvisoriesLayer } from './advisoriesLayer.js';
+import { getAdvisoriesLayer, updateAdvisoriesLayer } from './advisoriesLayer.js';
 import { getCamerasLayer, updateCamerasLayer } from './camerasLayer.js';
 import { getCurrentWeatherLayer, updateCurrentWeatherLayer } from './currentWeatherLayer.js';
 import { loadEventsLayers, updateEventsLayers } from './eventsLayer.js';
@@ -8,7 +8,8 @@ import { getHefLayer, updateHefLayer } from './hefLayer.js';
 import { getRestStopsLayer, updateRestStopsLayer } from './restStopsLayer.js';
 import { getLargeRestStopsLayer, updateLargeRestStopsLayer } from './largeRestStopsLayer.js';
 import { getRouteLayer } from './routeLayer.js';
-import { getBorderCrossingsLayer } from "./borderCrossingsLayer";
+import { getBorderCrossingsLayer, updateBorderCrossingsLayer } from "./borderCrossingsLayer";
+import { getWildfiresLayer, updateWildfiresLayer } from "./wildfiresLayer";
 
 const layerFuncMap = {
   advisoriesLayer: getAdvisoriesLayer,
@@ -21,9 +22,11 @@ const layerFuncMap = {
   largeRestStops: getLargeRestStopsLayer,
   routeLayer: getRouteLayer,
   borderCrossings: getBorderCrossingsLayer,
+  wildfires: getWildfiresLayer
 }
 
 const layerUpdateFuncMap = {
+  advisoriesLayer: updateAdvisoriesLayer,
   highwayCams: updateCamerasLayer,
   inlandFerries: updateFerriesLayer,
   weather: updateCurrentWeatherLayer,
@@ -31,16 +34,18 @@ const layerUpdateFuncMap = {
   hef: updateHefLayer,
   restStops: updateRestStopsLayer,
   largeRestStops: updateLargeRestStopsLayer,
+  borderCrossings: updateBorderCrossingsLayer,
+  wildfires: updateWildfiresLayer
 }
 
 export const loadLayer = (mapLayers, mapRef, mapContext, key, dataList, filteredDataList, zIndex, referenceData, updateReferenceFeature, setLoadingLayers) => {
-  // Always remove and regenerate route and advisory layer
-  if (key == 'routeLayer' || key == 'advisoriesLayer') {
+  // Always remove and regenerate route layer
+  if (key == 'routeLayer') {
     mapRef.current.removeLayer(mapLayers.current[key]);
   }
 
   if (dataList) {
-    if (!mapLayers.current[key] || key == 'routeLayer' || key == 'advisoriesLayer') {
+    if (!mapLayers.current[key] || key == 'routeLayer') {
       // Generate and add layer if it doesn't exist
       mapLayers.current[key] = layerFuncMap[key](
         dataList,
@@ -53,12 +58,11 @@ export const loadLayer = (mapLayers, mapRef, mapContext, key, dataList, filtered
 
       mapRef.current.addLayer(mapLayers.current[key]);
       mapLayers.current[key].setZIndex(zIndex);
-
     }
 
     // Toggle features' styles based on dataList
-    if (key != 'routeLayer' && key != 'advisoriesLayer' && key != 'borderCrossings') {
-      layerUpdateFuncMap[key](filteredDataList, mapLayers.current[key], setLoadingLayers);
+    if (key != 'routeLayer') {
+      return layerUpdateFuncMap[key](filteredDataList, mapLayers.current[key], setLoadingLayers);
     }
   }
 }
@@ -91,6 +95,9 @@ export const enableReferencedLayer = (referenceData, mapContext) => {
       mapContext.visible_layers['largeRestStops'] = true;
     }
 
+  } else if (featureType === 'wildfire') {
+    mapContext.visible_layers['wildfires'] = true;
+
   } else {
     const featureDisplayCategory = referenceData.display_category;
     switch (featureDisplayCategory) {
@@ -113,6 +120,10 @@ export const enableReferencedLayer = (referenceData, mapContext) => {
       case 'chainUps':
         mapContext.visible_layers['chainUps'] = true;
         mapContext.visible_layers['chainUpsLines'] = true;
+        break;
+      case 'roadConditions':
+        mapContext.visible_layers['roadConditions'] = true;
+        mapContext.visible_layers['roadConditionsLines'] = true;
         break;
     }
   }

@@ -17,7 +17,6 @@
 
     .popup__content {
       &__title {
-        border-bottom: 1px solid $Divider;
         .name {
           margin-bottom: 0;
         }
@@ -26,18 +25,15 @@
           color: $Grey80;
           margin-bottom: 0;
         }
-      }
-      &__description {
-        > p:first-child {
-          font-weight: bold;
-          font-size: 0.875rem;
-          height: 1.3125rem;
-          margin-bottom: 0;
-        }
-
-        > p:nth-child(2) {
+        .location {
           font-size: 0.875rem;
           margin-top: 0;
+          color: $Grey80;
+        }
+      }
+      &__description {
+        & > p:first-child {
+          font-weight: bold;
           margin-bottom: 0;
         }
 
@@ -46,6 +42,9 @@
         }
 
         &.last-update {
+          .friendly-time-text {
+            font-size: 0.875rem;
+          }
           .friendly-time__tooltip {
             left: 0;
             transform: none;
@@ -61,6 +60,7 @@
       &__block {
         display: flex;
         justify-content: space-between;
+        gap: 12px;
 
       > div {
         flex: 1;
@@ -72,89 +72,33 @@
     &.major, &.closures, &.futureEvents.closure {
       .popup__title {
         background-color: $Surface-major;
-        border-top: 4px solid $Error;
 
         .name {
           color: $Error;
         }
-
-      }
-
-      .popup__content {
-        &__title {
-          .name {
-            color: $Error;
-            font-size: 1.5rem;
-          }
-
-          .location {
-            color: $Red-dark;
-            font-size: 0.875rem;
-            margin-top: 0;
-          }
-        }
-        &__description {
-          time {
-            font-size: 0.875rem;
-          }
-        }
-
       }
     }
 
     &.minor, &.roadConditions {
       .popup__title {
         background-color: $Gold30;
-        border-top: 4px solid $BC-Yellow;
 
         .name {
           color: $Gold110;
-        }
-      }
-
-      .popup__content {
-        &__title {
-          .name {
-            color: $Gold110;
-          }
-
-          .location {
-            color: $Type-Secondary;
-            font-size: 0.875rem;
-          }
-        }
-        &__description {
-          time {
-            font-size: 0.875rem;
-            &:hover {
-              color: $Type-Link;
-            }
-          }
         }
       }
     }
 
     &.chainUps {
       .popup__title {
-        background-color: $Gold10;
-        border-top: 4px solid $Gold80;
+        background-color: $Yellow-10;
 
         .name {
-          color: $Gold110;
+          color: $Type-Primary;
         }
       }
 
       .popup__content {
-        &__title {
-          .name {
-            color: $Gold110;
-          }
-
-          .location {
-            color: $Type-Secondary;
-            font-size: 0.875rem;
-          }
-        }
         &__description {
           time {
             font-size: 0.875rem;
@@ -162,6 +106,9 @@
               color: $Type-Link;
             }
           }
+        }
+        &__shadow-box {
+          font-size: 0.875rem;
         }
       }
     }
