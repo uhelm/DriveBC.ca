@@ -20,3 +20,10 @@ jobs:
           role-to-assume:  arn:aws:iam::832570432760:role/github-drivebc-ca
           role-session-name: GitHubActions
           aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Deploy with Terraform
+        working-directory: infrastructure/aws/email/
+        run: |
+          terraform init
+          terraform plan
+          terraform apply -auto-approve
