@@ -14,16 +14,22 @@ jobs:
     steps:
       - name: Git clone the repository
         uses: actions/checkout@v5
+        
       - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
         with:
           role-to-assume:  arn:aws:iam::832570432760:role/github-drivebc-ca
           role-session-name: GitHubActions
           aws-region: ${{ env.AWS_REGION }}
-      
+      - name: Setup Terraform with specified version on the runner
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.13.5
       - name: Deploy with Terraform
         working-directory: infrastructure/aws/email/
         run: |
           terraform init
+          terraform fmt -check
+          terraform validate
           terraform plan
           terraform apply -auto-approve
